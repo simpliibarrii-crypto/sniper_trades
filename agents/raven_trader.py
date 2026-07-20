@@ -617,21 +617,250 @@ def analyze_timeframe(
     }
 
 
-def _order_block_hint(candles: List[Dict[str, Any]]) -> str:
+def _order_block_zone(candles: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     if len(candles) < 6:
-        return "n/a"
+        return None
     best_i, best_body = -1, 0.0
-    for i in range(-min(20, len(candles)), -1):
+    start = max(0, len(candles) - 20)
+    for i in range(start, len(candles) - 1):
         c = candles[i]
         body = abs(float(c["c"]) - float(c["o"]))
         if body > best_body:
             best_body = body
             best_i = i
-    if best_i == -1:
-        return "n/a"
+    if best_i < 0:
+        return None
     c = candles[best_i]
-    side = "bullish OB" if float(c["c"]) > float(c["o"]) else "bearish OB"
-    return f"{side} near {_fmt(float(c['o']))}–{_fmt(float(c['c']))} (recent impulse)"
+    o, cl = float(c["o"]), float(c["c"])
+    bull = cl > o
+    return {
+        "index": best_i,
+        "top": max(o, cl),
+        "bottom": min(o, cl),
+        "side": "bullish" if bull else "bearish",
+        "label": "Bull OB" if bull else "Bear OB",
+    }
+
+
+def _order_block_hint(candles: List[Dict[str, Any]]) -> str:
+    z = _order_block_zone(candles)
+    if not z:
+        return "n/a"
+    return (
+        f"{z['label']} near {_fmt(z['bottom'])}–{_fmt(z['top'])} (recent impulse)"
+    )
+
+
+def _rolling_sma_series(series: List[float], n: int) -> List[Optional[float]]:
+    out: List[Optional[float]] = []
+    for i in range(len(series)):
+        if i + 1 < n:
+            out.append(None)
+        else:
+            out.append(sum(series[i + 1 - n : i + 1]) / n)
+    return out
+
+
+def _bb_series(
+    series: List[float], n: int = 20, k: float = 2.0
+) -> Dict[str, List[Optional[float]]]:
+    mid: List[Optional[float]] = []
+    upper: List[Optional[float]] = []
+    lower: List[Optional[float]] = []
+    for i in range(len(series)):
+        if i + 1 < n:
+            mid.append(None)
+            upper.append(None)
+            lower.append(None)
+            continue
+        window = series[i + 1 - n : i + 1]
+        m = sum(window) / n
+        var = sum((x - m) ** 2 for x in window) / n
+        std = var**0.5
+        mid.append(m)
+        upper.append(m + k * std)
+        lower.append(m - k * std)
+    return {"mid": mid, "upper": upper, "lower": lower}
+
+
+def build_chart_overlay(
+    candles: List[Dict[str, Any]],
+    analysis: Optional[Dict[str, Any]],
+    decision: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Numeric layers the UI draws and animates on the main chart."""
+    closes = _closes(candles)
+    vols = _vols(candles)
+    n = len(closes)
+    ema21_full = ema_series(closes, 21) if n else []
+    # pad ema to full length if short
+    if len(ema21_full) < n:
+        ema21_full = [None] * (n - len(ema21_full)) + ema21_full  # type: ignore[list-item]
+    bb = _bb_series(closes, 20, 2.0)
+    analysis = analysis or {}
+    decision = decision or {}
+    fib = analysis.get("fib") or {}
+    piv = analysis.get("pivots") or {}
+    levels: List[Dict[str, Any]] = []
+
+    def add_level(lid: str, price: Any, label: str, kind: str, color: str) -> None:
+        if price is None:
+            return
+        try:
+            p = float(price)
+        except (TypeError, ValueError):
+            return
+        levels.append(
+            {"id": lid, "price": p, "label": label, "kind": kind, "color": color}
+        )
+
+    add_level("support", analysis.get("support"), "Support", "sr", "#3dd68c")
+    add_level("resistance", analysis.get("resistance"), "Resistance", "sr", "#ff6b7a")
+    add_level("pivot", piv.get("p"), "Pivot", "pivot", "#6ea8ff")
+    add_level("r1", piv.get("r1"), "R1", "pivot", "#ff8a96")
+    add_level("s1", piv.get("s1"), "S1", "pivot", "#4aeb9a")
+    add_level("r2", piv.get("r2"), "R2", "pivot", "#ff8a96")
+    add_level("s2", piv.get("s2"), "S2", "pivot", "#4aeb9a")
+    for key, lab in (
+        ("fib_0.236", "Fib 23.6%"),
+        ("fib_0.382", "Fib 38.2%"),
+        ("fib_0.5", "Fib 50%"),
+        ("fib_0.618", "Fib 61.8%"),
+        ("fib_0.786", "Fib 78.6%"),
+        ("swing_high", "Swing High"),
+        ("swing_low", "Swing Low"),
+    ):
+        add_level(key, fib.get(key), lab, "fib", "#f0b429")
+
+    # trade plan markers
+    markers: List[Dict[str, Any]] = []
+    for mid, key, lab, color in (
+        ("entry", "entry", "ENTRY", "#b86cff"),
+        ("stop", "stop_loss", "STOP", "#ff6b7a"),
+        ("tp1", "take_profit_1", "TP1", "#3dd68c"),
+        ("tp2", "take_profit_2", "TP2", "#3dd6c6"),
+    ):
+        px = decision.get(key)
+        if px is None:
+            continue
+        markers.append(
+            {
+                "id": mid,
+                "price": float(px),
+                "label": lab,
+                "color": color,
+                "side": decision.get("direction") or decision.get("side"),
+            }
+        )
+
+    zone = _order_block_zone(candles)
+    zones: List[Dict[str, Any]] = []
+    if zone:
+        zones.append(
+            {
+                "id": "order_block",
+                "top": zone["top"],
+                "bottom": zone["bottom"],
+                "index": zone["index"],
+                "side": zone["side"],
+                "label": zone["label"],
+            }
+        )
+
+    tools_active = [
+        "Candles",
+        "Volume",
+        "SMA20",
+        "SMA50",
+        "EMA21",
+        "Bollinger",
+        "RSI",
+        "ATR",
+        "MACD",
+        "Stochastic",
+        "Fib",
+        "Pivots",
+        "S/R",
+        "Order Block",
+        "Ichimoku",
+        "Volume Profile",
+    ]
+    return {
+        "timeframe": analysis.get("timeframe"),
+        "bars": n,
+        "series": {
+            "sma20": _rolling_sma_series(closes, 20),
+            "sma50": _rolling_sma_series(closes, 50),
+            "ema21": ema21_full,
+            "bb_mid": bb["mid"],
+            "bb_upper": bb["upper"],
+            "bb_lower": bb["lower"],
+            "volume": vols,
+        },
+        "levels": levels,
+        "zones": zones,
+        "markers": markers,
+        "stats": {
+            "rsi": analysis.get("rsi"),
+            "atr": analysis.get("atr"),
+            "sma20": analysis.get("sma20"),
+            "sma50": analysis.get("sma50"),
+            "bias_label": analysis.get("bias_label"),
+            "bias_score": analysis.get("bias_score"),
+            "pattern": next(
+                (
+                    t.get("reading")
+                    for t in (analysis.get("tools") or [])
+                    if t.get("tool") == "Candlestick pattern"
+                ),
+                None,
+            ),
+            "ichimoku": next(
+                (
+                    t.get("reading")
+                    for t in (analysis.get("tools") or [])
+                    if "Ichimoku" in str(t.get("tool") or "")
+                ),
+                None,
+            ),
+            "macd": next(
+                (
+                    t.get("reading")
+                    for t in (analysis.get("tools") or [])
+                    if str(t.get("tool") or "").startswith("MACD")
+                ),
+                None,
+            ),
+            "stoch": next(
+                (
+                    t.get("reading")
+                    for t in (analysis.get("tools") or [])
+                    if "Stochastic" in str(t.get("tool") or "")
+                ),
+                None,
+            ),
+            "obv": next(
+                (
+                    t.get("reading")
+                    for t in (analysis.get("tools") or [])
+                    if "On-Balance" in str(t.get("tool") or "")
+                ),
+                None,
+            ),
+            "volume_forecast": analysis.get("volume_forecast"),
+            "poc": (analysis.get("fib") and None)
+            or next(
+                (
+                    t.get("reading")
+                    for t in (analysis.get("tools") or [])
+                    if "Volume Profile" in str(t.get("tool") or "")
+                ),
+                None,
+            ),
+        },
+        "tools_active": tools_active,
+        "tools_detail": analysis.get("tools") or [],
+    }
 
 
 def _score_bias(
@@ -1042,6 +1271,17 @@ def raven_analyze(
         "tools_consulted": tools_lines[:40],
     }
 
+    # Prefer primary TF candles for chart overlay
+    primary_candles: List[Dict[str, Any]] = []
+    if user_tf in tfs:
+        primary_candles = (tfs.get(user_tf) or {}).get("candles") or []
+    if not primary_candles:
+        for pack in tfs.values():
+            if pack.get("candles"):
+                primary_candles = pack["candles"]
+                break
+    overlay = build_chart_overlay(primary_candles, primary, decision)
+
     return {
         "jspace": jspace,
         "tv_analysis": tv_analysis,
@@ -1051,6 +1291,7 @@ def raven_analyze(
         "summary": summary,
         "result_text": result_text,
         "plan": plan,
+        "chart_overlay": overlay,
         "analyses": {
             tf: {
                 "bias_label": a["bias_label"],
@@ -1058,7 +1299,15 @@ def raven_analyze(
                 "rsi": a["rsi"],
                 "atr": a["atr"],
                 "last": a["last"],
+                "sma20": a.get("sma20"),
+                "sma50": a.get("sma50"),
+                "support": a.get("support"),
+                "resistance": a.get("resistance"),
+                "pivots": a.get("pivots"),
+                "fib": a.get("fib"),
                 "volume_forecast": a.get("volume_forecast"),
+                "tools": a.get("tools"),
+                "bars": a.get("bars"),
             }
             for tf, a in analyses.items()
         },

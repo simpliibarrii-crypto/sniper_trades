@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "RavenTrade Core · Sniper Trades"
-    version: str = "6.3.0"
+    version: str = "6.4.0"
     # 0.0.0.0 so phones on the same LAN can open the deck
     host: str = "0.0.0.0"
     port: int = 8000

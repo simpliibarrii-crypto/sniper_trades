@@ -327,6 +327,8 @@ async def sniper_live(
                     "summary": raven.get("summary"),
                     "result_text": raven.get("result_text"),
                     "mtf_analyses": raven.get("analyses"),
+                    "chart_overlay": raven.get("chart_overlay"),
+                    "trade_decision": raven.get("trade_decision"),
                     "ts": time.time(),
                 }
                 yield f"event: sniper\ndata: {json.dumps(payload)}\n\n"
@@ -409,6 +411,8 @@ async def live_deck(
                     "summary": raven.get("summary"),
                     "result_text": raven.get("result_text"),
                     "mtf_analyses": raven.get("analyses"),
+                    "chart_overlay": raven.get("chart_overlay"),
+                    "trade_decision": raven.get("trade_decision"),
                     "ts": time.time(),
                 }
                 yield f"event: sniper\ndata: {json.dumps(sniper_payload)}\n\n"
