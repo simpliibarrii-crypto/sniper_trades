@@ -76,7 +76,18 @@ async def lifespan(app: FastAPI):
         market_store.init_db()
     except Exception:
         pass
+
+    async def _bg_warmup() -> None:
+        """Prefetch liquid pairs into SQLite ledger so chart first-paint is local."""
+        try:
+            await asyncio.sleep(0.15)
+            await asyncio.to_thread(market_store.warmup_symbols)
+        except Exception:
+            pass
+
+    task = asyncio.create_task(_bg_warmup())
     yield
+    task.cancel()
     pipeline.shutdown()
 
 
@@ -112,7 +123,8 @@ async def timing_header(request: Request, call_next):
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; style-src 'self' 'unsafe-inline'; "
         "script-src 'self' 'unsafe-inline'; connect-src 'self'; "
-        "img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        "img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; "
+        "worker-src 'self'"
     )
     return response
 
@@ -294,6 +306,26 @@ async def service_worker():
     raise HTTPException(status_code=404, detail="sw missing")
 
 
+@app.get("/vendor/{asset_path:path}")
+async def vendor_asset(asset_path: str):
+    """Local static vendor assets (Lightweight Charts — no CDN / CSP issues)."""
+    safe = Path(asset_path)
+    if ".." in safe.parts:
+        raise HTTPException(status_code=400, detail="invalid path")
+    path = (_UI_DIR / "vendor" / safe).resolve()
+    vendor_root = (_UI_DIR / "vendor").resolve()
+    if not str(path).startswith(str(vendor_root)) or not path.is_file():
+        raise HTTPException(status_code=404, detail="asset missing")
+    media = "application/javascript" if path.suffix == ".js" else "application/octet-stream"
+    return FileResponse(path, media_type=media)
+
+
+@app.post("/ledger/warmup")
+async def ledger_warmup():
+    """Force-prefetch common markets into the embedded ledger."""
+    return await asyncio.to_thread(market_store.warmup_symbols)
+
+
 @app.get("/sniper/live")
 async def sniper_live(
     symbol: str = Query("BTC_USDT", max_length=32),
@@ -390,10 +422,14 @@ async def live_deck(
             inst.split("_")[0].upper() if "_" in inst else inst.upper()
         )
         intent_base["timeframe"] = timeframe
-        # Instant chart paint from SQLite ledger if present
+        # Instant chart paint: any ledger rows (stale OK) before network work
         try:
             cached = await asyncio.to_thread(
-                market_store.get_cached_candles, inst, timeframe, 120
+                market_store.get_cached_candles,
+                inst,
+                timeframe,
+                120,
+                allow_stale=True,
             )
         except Exception:
             cached = None
@@ -402,7 +438,10 @@ async def live_deck(
             f"data: {json.dumps({'deck': True, 'instrument': inst, 'timeframe': timeframe, 'grok': grok_live.grok_status(), 'ledger': market_store.stats()})}\n\n"
         )
         if cached and cached.get("candles"):
-            yield f"event: candles\ndata: {json.dumps({'instrument': inst, 'timeframe': timeframe, 'source': cached.get('source'), 'candles': cached['candles'], 'cached': True})}\n\n"
+            yield (
+                "event: candles\n"
+                f"data: {json.dumps({'instrument': inst, 'timeframe': timeframe, 'source': cached.get('source'), 'candles': cached['candles'], 'cached': True, 'stale': cached.get('stale'), 'cache_age_s': cached.get('cache_age_s')})}\n\n"
+            )
         prior: Optional[dict] = None
         tick = 0
         last_news: Optional[dict] = None
@@ -653,10 +692,14 @@ async def market_candles(
     symbol: str = Query("BTC_USDT", max_length=32),
     timeframe: str = Query("1m", max_length=8),
     count: int = Query(120, ge=5, le=1000),
+    fast: bool = Query(
+        False,
+        description="Serve ledger/stale first for instant chart paint (no network wait).",
+    ),
 ):
     try:
         data = await asyncio.to_thread(
-            free_market.get_candles, symbol, timeframe, count
+            free_market.get_candles, symbol, timeframe, count, True, fast
         )
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=str(exc)) from exc

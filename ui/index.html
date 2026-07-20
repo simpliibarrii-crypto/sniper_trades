@@ -9,8 +9,8 @@
   <meta name="mobile-web-app-capable" content="yes"/>
   <link rel="manifest" href="/manifest.webmanifest"/>
   <title>RavenTrade Core · Crypto Intelligence</title>
-  <!-- TradingView Lightweight Charts — real time axis, live bars, price lines -->
-  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+  <!-- TradingView Lightweight Charts — vendored locally (CSP-safe, no CDN wait) -->
+  <script src="/vendor/lightweight-charts.min.js"></script>
   <style>
     :root {
       color-scheme: dark;
@@ -478,7 +478,7 @@
       <button class="ghost" id="themeToggle" type="button" aria-label="Toggle color theme">Light mode</button>
       <button class="primary" id="tradeNowHeader" type="button">Trade now</button>
       <span class="badge" title="No transaction can leave without a wallet or typed confirmation">Defense locked</span>
-      <span class="badge" id="ver">v6.7</span>
+      <span class="badge" id="ver">v6.8</span>
     </div>
   </header>
 
@@ -575,6 +575,7 @@
         </div>
         <div class="row">
           <span class="pill live" id="aiScanPill">AI idle</span>
+          <span class="pill" id="ledgerPill" title="Embedded SQLite market ledger">ledger —</span>
           <button class="ghost" id="openTv" type="button" title="Open this market in TradingView">TradingView ↗</button>
           <span class="pill" id="chartTfPill">1m</span>
         </div>
@@ -593,8 +594,8 @@
         <div class="tick-meta">src <strong id="srcPx">—</strong></div>
       </div>
       <div class="chart-wrap">
-        <div class="chart-empty show" id="chartEmpty">Starting live feed…</div>
-        <div class="chart-hud" id="chartHud">Waiting for candles…</div>
+        <div class="chart-empty show" id="chartEmpty">Loading ledger → free market…</div>
+        <div class="chart-hud" id="chartHud">Ledger-first paint · hash chain documents every refresh</div>
         <div id="chartHost" role="img" aria-label="Live trading chart with time axis and AI entry/exit"></div>
       </div>
       <div class="chart-legend" id="chartLegend">
@@ -1105,10 +1106,10 @@ document.querySelectorAll('.tab').forEach((btn) => {
     if (panel) panel.classList.add('active');
     else console.warn('missing panel', btn.dataset.tab);
     localStorage.setItem('sniper-tab', btn.dataset.tab);
-    if (btn.dataset.tab === 'copy') { refreshCopyState(); ensurePaperDesk(); }
+    if (btn.dataset.tab === 'copy') { refreshCopyState(); ensurePaperDesk(); seedPaperDeskIfEmpty(); }
     if (btn.dataset.tab === 'deck' && !deckEs) loadNewsOnce();
     if (btn.dataset.tab === 'connections') { loadConnections(true); loadChain(); }
-    if (btn.dataset.tab === 'research') { loadLedgerMini(); }
+    if (btn.dataset.tab === 'research') { loadLedgerMini(); fillResearchFromDeck(); }
     // resize chart when returning to deck
     if (btn.dataset.tab === 'deck') setTimeout(() => { try { resizeChart(); } catch(_){} }, 50);
   });
@@ -1588,18 +1589,47 @@ function applyTicker(t) {
   }
 }
 
-function setCandles(candles, source) {
+function setCandles(candles, source, meta) {
   candlesCache = (candles || []).slice();
   if (source) {
     if ($('srcPx')) $('srcPx').textContent = source;
     if ($('lsFeed')) $('lsFeed').textContent = source;
+    if ($('deckSrc')) $('deckSrc').textContent = 'feed ' + source;
   }
   pushChartData(candlesCache);
   if (chartOverlay) applyOverlayToChart(chartOverlay);
   if ($('aiScanPill')) {
-    $('aiScanPill').textContent = candlesCache.length ? 'Live chart · ' + (source || 'feed') : 'AI idle';
+    const tag = meta && meta.cached ? (meta.stale ? 'ledger·stale' : 'ledger') : (source || 'feed');
+    $('aiScanPill').textContent = candlesCache.length ? 'Live · ' + tag : 'AI idle';
     $('aiScanPill').className = 'pill live';
   }
+  // Persist last series for instant reload paint (local traffic cache)
+  try {
+    if (candlesCache.length >= 8) {
+      const key = 'sniper-candles:' + ($('deckSym')?.value || 'BTC_USDT') + ':' + ($('deckTf')?.value || '1m');
+      localStorage.setItem(key, JSON.stringify({
+        t: Date.now(), source: source || '', candles: candlesCache.slice(-160), meta: meta || {},
+      }));
+    }
+  } catch (_) {}
+}
+
+function paintCachedCandlesLocal() {
+  try {
+    const sym = $('deckSym')?.value?.trim() || 'BTC_USDT';
+    const tf = $('deckTf')?.value || '1m';
+    const raw = localStorage.getItem('sniper-candles:' + sym + ':' + tf);
+    if (!raw) return false;
+    const pack = JSON.parse(raw);
+    if (!pack.candles || pack.candles.length < 8) return false;
+    // Use local snapshot only if < 2h old
+    if (Date.now() - (pack.t || 0) > 2 * 3600 * 1000) return false;
+    setCandles(pack.candles, (pack.source || 'local-cache') + '·boot', { cached: true, stale: true });
+    if ($('chartEmpty')) {
+      $('chartEmpty').textContent = 'Local snapshot · refreshing from ledger…';
+    }
+    return true;
+  } catch (_) { return false; }
 }
 
 function setChartOverlay(ov) {
@@ -1701,6 +1731,7 @@ function buildMarkersFromDecision(data) {
 }
 
 function applySniper(data) {
+  window.__lastSniper = data;
   if (data.ticker) applyTicker(data.ticker);
   if (data.candles && data.candles.length) setCandles(data.candles, (data.data_sources || [])[0]);
   // Always force visible AI entry/exit from decision (Hold still shows plan levels)
@@ -1849,25 +1880,37 @@ function startDeck() {
   const q = $('deckQ').value.trim() || 'live sniper';
   if ($('chartTfPill')) $('chartTfPill').textContent = tf;
   setDeckStatus(null, 'connecting…');
-  // re-init chart so timescale matches new stream
-  initChart();
-  candlesCache = [];
+  // Keep existing chart if present (no full wipe → no flicker); ensure host ready
+  if (!lwChart) initChart();
   chartOverlay = null;
+  // Instant paint from browser cache while network/SSE arms
+  if (!candlesCache.length) paintCachedCandlesLocal();
   // Faster live feel: ticker path still updates bars between full packs
   const url = `/live/deck?symbol=${encodeURIComponent(sym)}&timeframe=${encodeURIComponent(tf)}&interval_ms=3000&query=${encodeURIComponent(q)}&news_every=3&grok_every=3`;
   deckEs = new EventSource(url);
   $('deckGo').textContent = 'Live…';
   loadOrderBook();
-  // also fetch candles immediately so timescale paints before first SSE pack
-  fetch(`/market/candles?symbol=${encodeURIComponent(sym)}&timeframe=${encodeURIComponent(tf)}&count=120`)
+  // Ledger-first candles (stale OK) then accurate network refresh
+  fetch(`/market/candles?symbol=${encodeURIComponent(sym)}&timeframe=${encodeURIComponent(tf)}&count=120&fast=1`)
     .then((r) => r.json())
-    .then((d) => { if (d.candles) setCandles(d.candles, d.source); })
+    .then((d) => {
+      if (d.candles) setCandles(d.candles, d.source, { cached: d.cached, stale: d.stale, age: d.cache_age_s });
+      // Background accurate refresh (may hit network if soft TTL expired)
+      return fetch(`/market/candles?symbol=${encodeURIComponent(sym)}&timeframe=${encodeURIComponent(tf)}&count=120`);
+    })
+    .then((r) => r && r.json ? r.json() : null)
+    .then((d) => { if (d && d.candles) setCandles(d.candles, d.source, { cached: d.cached, stale: d.stale, age: d.cache_age_s }); })
     .catch(() => {});
   deckEs.addEventListener('hello', (ev) => {
     setDeckStatus(true, 'live deck armed');
     try {
       const d = JSON.parse(ev.data);
       if (d.grok) applyGrokStatus(d.grok);
+      if (d.ledger && $('ledgerPill')) {
+        const L = d.ledger;
+        $('ledgerPill').textContent = `ledger ${L.candles || 0} · ${L.blocks || 0} blk`;
+        $('ledgerPill').className = 'pill ok';
+      }
     } catch (_) {}
   });
   deckEs.addEventListener('ticker', (ev) => {
@@ -1876,7 +1919,9 @@ function startDeck() {
   deckEs.addEventListener('candles', (ev) => {
     try {
       const d = JSON.parse(ev.data);
-      if (d.candles && d.candles.length) setCandles(d.candles, d.source || d.timeframe);
+      if (d.candles && d.candles.length) {
+        setCandles(d.candles, d.source || d.timeframe, { cached: d.cached, stale: d.stale, age: d.cache_age_s });
+      }
     } catch (e) { console.warn('candles parse', e); }
   });
   deckEs.addEventListener('sniper', (ev) => {
@@ -2407,7 +2452,51 @@ async function ensurePaperDesk() {
     if ($('copyLeadCount')) $('copyLeadCount').textContent = nL;
     if ($('copyFollCount')) $('copyFollCount').textContent = nF;
     if ($('copyFillCount')) $('copyFillCount').textContent = nFill;
+    if (st.leaders && st.leaders[0]) {
+      if ($('follLead') && !$('follLead').value) $('follLead').value = st.leaders[0].leader_id;
+      if ($('sigLead') && !$('sigLead').value) $('sigLead').value = st.leaders[0].leader_id;
+    }
   } catch (_) {}
+}
+async function seedPaperDeskIfEmpty() {
+  try {
+    const st = await (await fetch('/copy/state')).json();
+    if ((st.leaders || []).length && (st.followers || []).length) {
+      await ensurePaperDesk();
+      await refreshCopyState();
+      return;
+    }
+    await seedPaperDesk();
+  } catch (_) {
+    await ensurePaperDesk();
+  }
+}
+function fillResearchFromDeck() {
+  // Seed research panel with live deck knowledge so the tab is never blank
+  try {
+    const last = window.__lastSniper || null;
+    if (last) {
+      if ($('researchBriefText')) {
+        const v = last.verdict || {};
+        const sp = last.strategy_position || {};
+        $('researchBriefText').textContent =
+          `${v.action || 'Hold'} · ${v.confidence != null ? Math.round(Number(v.confidence) * 100) + '% conf' : '—'} · ` +
+          `entry ${sp.entry != null ? fmt(sp.entry, 2) : '—'} · stop ${sp.stop_loss != null ? fmt(sp.stop_loss, 2) : '—'} · ` +
+          `TP1 ${sp.take_profit_1 != null ? fmt(sp.take_profit_1, 2) : '—'} · ${(last.summary || '').slice(0, 180)}`;
+      }
+      if ($('planR') && !window.__researchRan) {
+        $('planR').innerHTML = `
+          <dt>Live deck verdict</dt><dd>${esc((last.verdict || {}).action || 'Hold')} · ${esc((last.summary || '').slice(0, 120))}</dd>
+          <dt>Instrument</dt><dd>${esc(last.instrument || '—')} · ${esc(last.timeframe || '')}</dd>
+          <dt>Entry / Stop / TP1</dt><dd>${esc(fmt((last.strategy_position||{}).entry,2))} / ${esc(fmt((last.strategy_position||{}).stop_loss,2))} / ${esc(fmt((last.strategy_position||{}).take_profit_1,2))}</dd>
+          <dt>Data</dt><dd>${esc((last.data_sources || []).join(', ') || 'free public + ledger')}</dd>
+          <dt>Accuracy</dt><dd>Synced from flight deck · run Deep scan for full multi-TF brief.</dd>`;
+      }
+    } else if ($('researchBriefText') && $('researchBriefText').textContent.includes('Run a scan')) {
+      $('researchBriefText').textContent = 'Start Live on the Flight deck, or pick a template above — Deep scan uses the same free market ledger as the chart.';
+    }
+  } catch (_) {}
+  loadLedgerMini();
 }
 async function seedPaperDesk() {
   try {
@@ -2453,29 +2542,55 @@ fetch('/portfolio/paper').then((r) => r.json()).then(applyPortfolio).catch(() =>
 async function primeDashboard() {
   const symbol = $('deckSym').value.trim() || 'BTC_USDT';
   const tf = $('deckTf').value;
+  // 0ms: browser snapshot if any
+  paintCachedCandlesLocal();
   try {
+    // 1) Instant ledger path (fast=1) + ticker in parallel
     const [tickerRes, candleRes] = await Promise.all([
       fetch(`/market/ticker?symbol=${encodeURIComponent(symbol)}`),
-      fetch(`/market/candles?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(tf)}&count=120`),
+      fetch(`/market/candles?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(tf)}&count=120&fast=1`),
     ]);
     if (tickerRes.ok) applyTicker(await tickerRes.json());
-    if (candleRes.ok) { const d = await candleRes.json(); setCandles(d.candles, d.source); }
-  } catch (_) { $('kpiMarketNote').textContent = 'Feed unavailable · retry with Start live'; }
+    if (candleRes.ok) {
+      const d = await candleRes.json();
+      setCandles(d.candles, d.source, { cached: d.cached, stale: d.stale, age: d.cache_age_s });
+    }
+    // 2) Accurate refresh in background
+    fetch(`/market/candles?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(tf)}&count=120`)
+      .then((r) => r.json())
+      .then((d) => { if (d.candles) setCandles(d.candles, d.source, { cached: d.cached, stale: d.stale }); })
+      .catch(() => {});
+  } catch (_) {
+    if ($('kpiMarketNote')) $('kpiMarketNote').textContent = 'Feed unavailable · retry with Start live';
+  }
+  // Ledger badge
+  try {
+    const s = await (await fetch('/ledger/stats')).json();
+    if ($('ledgerPill')) {
+      $('ledgerPill').textContent = `ledger ${s.candles || 0} · ${s.blocks || 0} blk`;
+      $('ledgerPill').className = 'pill ok';
+    }
+  } catch (_) {}
 }
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
+// Ensure chart host exists before any paint
+try { initChart(); } catch (_) {}
 loadNewsOnce();
 loadOrderBook();
 loadMarketRadar();
 loadDiscovery();
 loadConnections(false);
+loadChain();
+loadLedgerMini();
+seedPaperDeskIfEmpty();
 refreshCopyState();
 primeDashboard();
 const savedTab = localStorage.getItem('sniper-tab');
 if (savedTab && savedTab !== 'deck') document.querySelector(`.tab[data-tab="${savedTab}"]`)?.click();
 // Auto-start live deck for phone/desktop immersive use
-setTimeout(() => { if (!deckEs) startDeck(); }, 600);
+setTimeout(() => { if (!deckEs) startDeck(); }, 400);
 </script>
 </body>
 </html>

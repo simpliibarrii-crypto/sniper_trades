@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional
 
 from agents.raven_trader import MTF_STACK
@@ -20,15 +21,15 @@ def build_market_pack(
     public APIs (Binance → Kraken → Coinbase → Crypto.com), via SQLite ledger cache.
 
     fast=True: chart-priority pack — primary + a few key TFs only (much faster).
+    TFs are fetched in parallel; primary is requested first and always included.
     """
     raw = symbol.strip()
     if "_" not in raw and not raw.upper().endswith(("USDT", "USD", "USDC")):
         raw = f"{raw}_USDT"
     inst = free_market.normalize_instrument(raw)
 
-    # Short-scale stack for free 1m feeds
     if fast:
-        short_stack = ("15m", "1h", "4h")  # primary already included
+        short_stack = ("15m", "1h", "4h")
     else:
         short_stack = ("1m", "5m", "15m")
     tfs: List[str] = []
@@ -61,32 +62,48 @@ def build_market_pack(
             return 100
         return 80 if fast else candle_count
 
-    timeframes: Dict[str, Any] = {}
-    sources_used: List[str] = []
-    # primary first for chart paint
     ordered = [primary_tf] + [t for t in tfs if t != primary_tf]
     limit = 4 if fast else 8
-    for tf in ordered[:limit]:
+    to_fetch = ordered[:limit]
+
+    def _one(tf: str) -> tuple:
         try:
             pack = free_market.get_candles(inst, timeframe=tf, count=_count_for(tf))
+            return tf, pack, None
+        except Exception as exc:  # noqa: BLE001
+            return (
+                tf,
+                {
+                    "source": "error",
+                    "instrument": inst,
+                    "timeframe": tf,
+                    "count": 0,
+                    "candles": [],
+                    "error": str(exc),
+                },
+                str(exc),
+            )
+
+    timeframes: Dict[str, Any] = {}
+    sources_used: List[str] = []
+    # Parallel network/cache — primary always in set
+    workers = min(4, max(1, len(to_fetch)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futs = [pool.submit(_one, tf) for tf in to_fetch]
+        for fut in as_completed(futs):
+            tf, pack, _err = fut.result()
             timeframes[tf] = pack
             src = pack.get("source")
-            if src and src not in sources_used:
+            if src and src not in sources_used and src != "error":
                 sources_used.append(src)
-        except Exception as exc:  # noqa: BLE001
-            timeframes[tf] = {
-                "source": "error",
-                "instrument": inst,
-                "timeframe": tf,
-                "count": 0,
-                "candles": [],
-                "error": str(exc),
-            }
+
+    # Preserve primary-first key order for consumers
+    ordered_tfs = {tf: timeframes[tf] for tf in to_fetch if tf in timeframes}
 
     return {
         "instrument": inst,
         "ticker": ticker,
-        "timeframes": timeframes,
+        "timeframes": ordered_tfs,
         "data_sources": sources_used,
         "feed": "free_public+ledger",
         "fast": fast,

@@ -99,6 +99,12 @@ class CandlesOut(BaseModel):
     timeframe: str
     count: int
     candles: List[CandleOut] = Field(default_factory=list)
+    cached: Optional[bool] = None
+    stale: Optional[bool] = None
+    cache_age_s: Optional[float] = None
+    block_hash: Optional[str] = None
+    merkle_root: Optional[str] = None
+    engine: Optional[str] = None
 
 
 class BookLevel(BaseModel):

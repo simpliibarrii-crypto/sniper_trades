@@ -403,17 +403,31 @@ def get_candles(
     timeframe: str = "1m",
     count: int = 100,
     use_cache: bool = True,
+    stale_first: bool = False,
 ) -> Dict[str, Any]:
+    """
+    Candles with ledger-first speed path:
+      1) soft-fresh SQLite hit → instant (accurate)
+      2) if stale_first: any ledger rows → instant chart paint (UI bootstrap)
+      3) network chain (Binance→…→CDC) → upsert + hash block
+      4) stale ledger rows → last-resort resilience
+    """
     inst = normalize_instrument(symbol)
     tf = timeframe.strip()
     count = max(5, min(int(count), 1000))
+    stale_hit: Optional[Dict[str, Any]] = None
     if use_cache:
         try:
             from services import market_store
 
-            hit = market_store.get_cached_candles(inst, tf, count)
+            hit = market_store.get_cached_candles(inst, tf, count, allow_stale=False)
             if hit and hit.get("candles"):
                 return hit
+            stale_hit = market_store.get_cached_candles(
+                inst, tf, count, allow_stale=True
+            )
+            if stale_first and stale_hit and stale_hit.get("candles"):
+                return stale_hit
         except Exception:
             pass
     errors: List[str] = []
@@ -421,14 +435,25 @@ def get_candles(
         try:
             pack = fn(inst, tf, count)
             if pack.get("candles"):
+                block = None
                 try:
                     from services import market_store
 
-                    market_store.upsert_candles(
-                        inst, tf, pack["candles"], source=str(pack.get("source") or "network")
+                    written = market_store.upsert_candles(
+                        inst,
+                        tf,
+                        pack["candles"],
+                        source=str(pack.get("source") or "network"),
                     )
+                    block = (written or {}).get("block")
                 except Exception:
                     pass
+                pack = dict(pack)
+                pack["cached"] = False
+                pack["stale"] = False
+                if block:
+                    pack["block_hash"] = block.get("block_hash")
+                    pack["merkle_root"] = block.get("merkle_root")
                 return pack
             errors.append(f"{fn.__name__}: empty")
         except Exception as exc:  # noqa: BLE001
@@ -440,56 +465,30 @@ def get_candles(
         try:
             from services import market_store
 
-            market_store.upsert_candles(
-                inst, tf, pack.get("candles") or [], source=str(pack.get("source") or "cdc")
+            written = market_store.upsert_candles(
+                inst,
+                tf,
+                pack.get("candles") or [],
+                source=str(pack.get("source") or "cdc"),
             )
+            if written.get("block"):
+                pack = dict(pack)
+                pack["block_hash"] = written["block"].get("block_hash")
         except Exception:
             pass
         return pack
     except Exception as exc:  # noqa: BLE001
         errors.append(f"cdc: {exc}")
-    # stale cache fallback (any age) for resilience
+    if stale_hit and stale_hit.get("candles"):
+        return stale_hit
     try:
         from services import market_store
 
-        # force-read without freshness by raw SQL path: get_cached with relaxed
-        market_store.init_db()
-        import sqlite3
-
-        with market_store._LOCK:
-            c = market_store._conn()
-            try:
-                rows = c.execute(
-                    """
-                    SELECT t,o,h,l,c,v,source FROM candles
-                    WHERE instrument=? AND timeframe=?
-                    ORDER BY t DESC LIMIT ?
-                    """,
-                    (inst, tf, count),
-                ).fetchall()
-                if rows:
-                    candles = [
-                        {
-                            "t": int(r["t"]),
-                            "o": r["o"],
-                            "h": r["h"],
-                            "l": r["l"],
-                            "c": r["c"],
-                            "v": r["v"],
-                        }
-                        for r in reversed(rows)
-                    ]
-                    return {
-                        "source": "sqlite_stale",
-                        "instrument": inst,
-                        "timeframe": tf,
-                        "count": len(candles),
-                        "candles": candles,
-                        "cached": True,
-                        "stale": True,
-                    }
-            finally:
-                c.close()
+        last = market_store.get_cached_candles(
+            inst, tf, count, allow_stale=True, max_age=7 * 86_400
+        )
+        if last and last.get("candles"):
+            return last
     except Exception as exc:  # noqa: BLE001
         errors.append(f"stale_cache: {exc}")
     raise RuntimeError("all free candle sources failed: " + " | ".join(errors[:5]))
