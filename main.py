@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import secrets
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -47,6 +49,7 @@ from services import (
     grok_live,
     integrations,
     market_store,
+    mcp_registry,
     paper_portfolio,
     pipeline,
     solana_wallet,
@@ -55,11 +58,27 @@ from services.copy_trade import get_engine
 from services.raven_market_pack import build_market_pack
 from services.risk import calculate_position_size
 from services.trade_intel import parse_trade_intent
-import os
 
 _UI = Path(__file__).resolve().parent / "ui" / "index.html"
 _UI_DIR = Path(__file__).resolve().parent / "ui"
 _settings = get_settings()
+
+
+def _authorize_live_submission(request: Request) -> None:
+    """Require two server-side locks in addition to the typed UI confirmation."""
+    if not _settings.live_trading_enabled:
+        raise HTTPException(
+            status_code=403,
+            detail="Live submission is disabled. Set SNIPER_LIVE_TRADING_ENABLED=true only after paper validation.",
+        )
+    if not _settings.control_token:
+        raise HTTPException(
+            status_code=503,
+            detail="Live submission requires a server-side SNIPER_CONTROL_TOKEN.",
+        )
+    supplied = request.headers.get("x-sniper-control-token", "")
+    if not secrets.compare_digest(supplied, _settings.control_token):
+        raise HTTPException(status_code=401, detail="Invalid live-trading control token.")
 
 # Propagate settings key into env for grok_live helper
 if _settings.xai_api_key and not os.environ.get("XAI_API_KEY"):
@@ -191,6 +210,85 @@ async def integration_list(probe: bool = Query(False)):
     g = grok_live.grok_status()
     snap["grok"] = g
     return snap
+
+
+@app.get("/mcp/catalog")
+async def mcp_catalog():
+    """List supported MCPs and direct feeds without installing or enabling them."""
+    return mcp_registry.catalog()
+
+
+@app.get("/extension/snapshot")
+async def extension_snapshot(
+    symbol: str = Query("BTC_USDT", max_length=32),
+    timeframe: str = Query("1m", max_length=8),
+):
+    """One-shot, read-only Raven snapshot for the localhost Chrome bridge.
+
+    The payload exposes market evidence and the resulting decision, but omits
+    private model internals and all order-submission capabilities.
+    """
+    try:
+        intent = parse_trade_intent(f"live sniper {symbol} {timeframe}")
+        intent["primary_symbol"] = (
+            symbol.split("_")[0].upper() if "_" in symbol else symbol.upper()
+        )
+        intent["timeframe"] = timeframe
+        market = await asyncio.to_thread(build_market_pack, symbol, timeframe)
+        raven = await asyncio.to_thread(raven_analyze, intent, market, [], None)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc)[:240]) from exc
+
+    ticker = market.get("ticker") or {}
+    analyses = raven.get("analyses") or {}
+    primary = analyses.get(timeframe) or next(iter(analyses.values()), {})
+    candles_pack = (market.get("timeframes") or {}).get(timeframe) or {}
+    decision = raven.get("trade_decision") or {}
+    verdict = raven.get("verdict") or {}
+    tools = primary.get("tools") or []
+    direction = str(decision.get("direction") or verdict.get("verdict") or "Hold")
+    conviction = int(decision.get("conviction") or verdict.get("conviction") or 0)
+
+    return {
+        "service": "Raven Sniper Trades",
+        "version": _settings.version,
+        "instrument": market.get("instrument") or symbol,
+        "timeframe": timeframe,
+        "source": ticker.get("source") or "public fallback",
+        "market": {
+            "last": ticker.get("last"),
+            "bid": ticker.get("bid"),
+            "ask": ticker.get("ask"),
+            "change_24h_pct": ticker.get("change_24h_pct"),
+            "candles": (candles_pack.get("candles") or [])[-60:],
+        },
+        "decision": {
+            **decision,
+            "direction": direction,
+            "conviction": conviction,
+            "qualified": direction in {"Long", "Short"} and conviction >= 65,
+            "summary": raven.get("summary"),
+        },
+        "evidence": {
+            "tools": tools[:20],
+            "timeframes": {
+                key: {
+                    "bias_label": value.get("bias_label"),
+                    "bias_score": value.get("bias_score"),
+                    "rsi": value.get("rsi"),
+                    "atr": value.get("atr"),
+                }
+                for key, value in analyses.items()
+            },
+        },
+        "execution": {
+            "paper_default": True,
+            "live_server_lock": _settings.live_trading_enabled,
+            "browser_can_submit_orders": False,
+            "wallet_signature_required": True,
+        },
+        "ts": time.time(),
+    }
 
 
 @app.get("/grok/status")
@@ -836,12 +934,14 @@ async def copy_register_follower(payload: FollowerCreate):
 
 
 @app.post("/copy/signals")
-async def copy_emit_signal(payload: SignalCreate):
+async def copy_emit_signal(payload: SignalCreate, request: Request):
     if payload.confirm_live and payload.confirmation_text != "CONFIRM LIVE":
         raise HTTPException(
             status_code=400,
             detail="Type CONFIRM LIVE to authorize real order submission",
         )
+    if payload.confirm_live:
+        _authorize_live_submission(request)
     try:
         result = await asyncio.to_thread(
             get_engine().emit_signal,
@@ -862,13 +962,17 @@ async def copy_emit_signal(payload: SignalCreate):
 
 
 @app.post("/copy/signals/{signal_id}/copy")
-async def copy_signal(signal_id: str, payload: Optional[CopySignalIn] = None):
+async def copy_signal(
+    signal_id: str, request: Request, payload: Optional[CopySignalIn] = None
+):
     confirm = payload.confirm_live if payload else False
     if confirm and (not payload or payload.confirmation_text != "CONFIRM LIVE"):
         raise HTTPException(
             status_code=400,
             detail="Type CONFIRM LIVE to authorize real order submission",
         )
+    if confirm:
+        _authorize_live_submission(request)
     try:
         fills = await asyncio.to_thread(
             get_engine().copy_signal, signal_id, confirm

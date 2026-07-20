@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Raven Sniper Trades</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <div class="mark">R</div>
+      <div>
+        <strong>RAVEN / SNIPER</strong>
+        <span>localhost intelligence bridge</span>
+      </div>
+      <i id="statusDot" aria-label="Connection status"></i>
+    </header>
+
+    <main>
+      <section class="signal-card">
+        <div class="eyebrow"><span id="source">WAITING FOR SERVER</span><time id="age">—</time></div>
+        <div class="signal-line">
+          <div>
+            <h1 id="direction">WARMING</h1>
+            <p id="instrument">BTC_USDT · 1m</p>
+          </div>
+          <div class="conviction"><b id="conviction">0%</b><span>conviction</span></div>
+        </div>
+        <p class="summary" id="summary">Start the Raven server, then refresh this bridge.</p>
+      </section>
+
+      <section class="grid" aria-label="Trade plan">
+        <div><span>LAST</span><b id="last">—</b></div>
+        <div><span>ENTRY</span><b id="entry">—</b></div>
+        <div><span>STOP</span><b id="stop">—</b></div>
+        <div><span>TARGET</span><b id="target">—</b></div>
+      </section>
+
+      <section class="evidence">
+        <div class="section-head"><span>TOOL TALONS</span><b id="toolCount">0 readings</b></div>
+        <ul id="tools"><li>No evidence snapshot yet.</li></ul>
+      </section>
+
+      <section class="controls">
+        <div class="section-head"><span>LOCAL LINK</span><b>READ ONLY</b></div>
+        <label>
+          Server
+          <input id="serverBase" type="url" value="http://127.0.0.1:8000" spellcheck="false" />
+        </label>
+        <div class="control-row">
+          <label>
+            Market
+            <select id="symbol">
+              <option>BTC_USDT</option><option>ETH_USDT</option><option>SOL_USDT</option>
+              <option>XRP_USDT</option><option>DOGE_USDT</option><option>ADA_USDT</option>
+              <option>AVAX_USDT</option><option>LINK_USDT</option><option>SUI_USDT</option>
+            </select>
+          </label>
+          <label>
+            Frame
+            <select id="timeframe">
+              <option>1m</option><option>5m</option><option>15m</option>
+              <option>1h</option><option>4h</option><option>6h</option><option>1D</option>
+            </select>
+          </label>
+        </div>
+        <div class="actions">
+          <button id="save" type="button">SAVE + SYNC</button>
+          <button id="refresh" type="button">REFRESH</button>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <a id="openDeck" href="http://127.0.0.1:8000" target="_blank" rel="noreferrer">OPEN FULL DECK ↗</a>
+      <span>PAPER DEFAULT · NO WALLET PERMISSION</span>
+    </footer>
+    <script src="popup.js"></script>
+  </body>
+</html>

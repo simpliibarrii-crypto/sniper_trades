@@ -11,7 +11,7 @@
   <title>RavenTrade · Live Crypto Desk</title>
   <meta name="description" content="Fast local crypto desk: live chart, AI verdict, paper trading. Defense-first — no silent orders."/>
   <!-- Styles in external file so Chrome DevTools → Sources can map & save edits -->
-  <link rel="stylesheet" href="/app.css?v=6.9"/>
+  <link rel="stylesheet" href="/app.css?v=7.0"/>
   <!-- TradingView Lightweight Charts — vendored locally (CSP-safe, no CDN wait) -->
   <script src="/vendor/lightweight-charts.min.js"></script>
   <style id="legacy-bridge">
@@ -36,7 +36,7 @@
       <button class="ghost" id="devToolsHelp" type="button" title="How to edit UI in Chrome DevTools">DevTools</button>
       <button class="primary" id="tradeNowHeader" type="button">Review trade</button>
       <span class="badge safe" title="No silent live orders — paper default + typed confirm">Paper default</span>
-      <span class="badge" id="ver">v6.9</span>
+      <span class="badge" id="ver">v7.0</span>
     </div>
   </header>
 
@@ -659,7 +659,7 @@ $('devCopyPath')?.addEventListener('click', async () => {
 });
 // Expose a tiny hook for console experimentation in Chrome DevTools
 window.RavenDesk = {
-  version: '6.9',
+  version: '7.0',
   uiPath: '/home/bclermo/sniper_trades/ui',
   css: '/app.css',
   reloadCss() {
