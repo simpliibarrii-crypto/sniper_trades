@@ -162,8 +162,8 @@ _CATALOG: List[Dict[str, Any]] = [
         "providers": ["Kraken CLI native MCP"],
         "data_shared": "Nothing until the operator starts and approves the local MCP.",
         "setup": "Install Kraken CLI separately and begin with market + paper services only.",
-        "action": "open_connections",
-        "action_label": "Review MCP boundary",
+        "action": "open_paper",
+        "action_label": "Review paper mode",
     },
     {
         "id": "raven_chrome_bridge",
@@ -177,8 +177,8 @@ _CATALOG: List[Dict[str, Any]] = [
         "providers": ["Raven localhost API"],
         "data_shared": "No wallet data; the extension only reads localhost.",
         "setup": "Load extension/ as an unpacked Chrome extension while the server is running.",
-        "action": "open_connections",
-        "action_label": "Open extension guide",
+        "action": "focus_market",
+        "action_label": "Open local deck",
     },
     {
         "id": "risk_engine",
