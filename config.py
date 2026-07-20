@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "RavenTrade Core · Sniper Trades"
-    version: str = "6.9.0"
+    version: str = "7.0.0"
     # 0.0.0.0 so phones on the same LAN can open the deck
     host: str = "0.0.0.0"
     port: int = 8000
@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     broadcast_top_k: int = 7
     cors_origins: str = "*"  # comma-separated
     access_log: bool = False
+    # Real exchange submission is a two-lock path: the operator must explicitly
+    # enable it and provide a control token. Paper and dry-run remain available.
+    live_trading_enabled: bool = False
+    control_token: str = ""
     # xAI / Grok (optional — local fallback if unset)
     xai_api_key: str = ""  # or env XAI_API_KEY / SNIPER_XAI_API_KEY
     xai_model: str = "grok-4-1-fast-non-reasoning"

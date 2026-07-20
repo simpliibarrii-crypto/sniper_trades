@@ -36,7 +36,24 @@ export XAI_API_KEY=...          # https://console.x.ai
 | Portfolio view | `/portfolio/paper` |
 | Connections health | `/integrations?probe=true` |
 
-## v6.2 Raven console
+## v7.0 private Raven terminal + local bridge
+
+- Owner-only Sites terminal with synchronized market, worldwide news, DEX discovery, auditable tool contributions, and exact plan markers
+- Manifest V3 Chrome extension in `extension/` for a read-only localhost signal badge and evidence snapshot
+- `GET /extension/snapshot` returns one bounded analysis payload without private model internals or order permissions
+- `GET /mcp/catalog` separates native MCPs from ordinary public APIs and keeps wallet-capable MCPs disabled by default
+- Kraken CLI native MCP is catalogued for market, account-read-only, and paper services; it is never installed or started automatically
+- Phantom MCP is catalogued as wallet-capable and requires separate manual configuration and human signing
+- Live copy orders now require all three gates: typed `CONFIRM LIVE`, `SNIPER_LIVE_TRADING_ENABLED=true`, and the `X-Sniper-Control-Token` header
+
+### Chrome extension
+
+Start the server, open `chrome://extensions`, enable Developer mode, then load
+`extension/` as an unpacked extension. The bridge only has `localhost` and
+`127.0.0.1` host access; it has no wallet, exchange, arbitrary-site, or order
+permission. See `extension/README.md` for the exact flow.
+
+## Raven console foundation
 
 - Unique purple-and-white cyber-noir dashboard with a responsive Raven analysis flow
 - Live order book, multi-timeframe tool telemetry, and projected volume-pressure logic
@@ -88,6 +105,8 @@ Open **http://127.0.0.1:8000**
 | GET | `/health` | Liveness |
 | GET | `/ready` | Readiness + session count |
 | GET | `/integrations` | Runtime connection catalog; add `?probe=true` for live health |
+| GET | `/mcp/catalog` | Opt-in MCP catalog and direct-feed boundaries |
+| GET | `/extension/snapshot` | Read-only Chrome bridge snapshot; no order capability |
 | POST | `/research/search` | Run J-Space research |
 | GET | `/sessions` | List warm sessions |
 | DELETE | `/sessions/{id}` | Drop a session |
@@ -147,7 +166,7 @@ curl -s -X POST http://127.0.0.1:8000/copy/leaders \
 ### Copy-trade safety
 
 - Followers default to **paper** ledger under `~/.local/share/sniper_trades/copy_trade.json`
-- **Live** mode uses `cdcx trade order --dry-run` unless `confirm_live=true` and `confirmation_text="CONFIRM LIVE"`
+- **Live** mode uses `cdcx trade order --dry-run` unless all live locks are satisfied: `confirm_live=true`, `confirmation_text="CONFIRM LIVE"`, `SNIPER_LIVE_TRADING_ENABLED=true`, and the correct `X-Sniper-Control-Token`
 - No withdraw paths; live still needs funded Exchange keys
 
 ## Smoothness profile

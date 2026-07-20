@@ -1,5 +1,5 @@
 /* Minimal offline shell for RavenTrade — network-first for API/SSE. */
-const CACHE = "raventrade-shell-v63";
+const CACHE = "raventrade-shell-v70";
 const SHELL = ["/", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
