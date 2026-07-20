@@ -1,0 +1,5 @@
+# Install order for smoothness:
+#   pip install -r requirements-core.txt   # day-to-day API
+#   pip install -r requirements-heavy.txt  # only when you need GPU/LLM
+
+-r requirements-core.txt

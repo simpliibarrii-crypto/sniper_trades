@@ -1,0 +1,818 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Sniper Trades · Live Deck</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #070a0f;
+      --card: #0f1520;
+      --fg: #eaf0f8;
+      --mut: #8b9bb4;
+      --acc: #3dd6c6;
+      --acc2: #6ea8ff;
+      --line: #1c2636;
+      --ok: #3dd68c;
+      --warn: #f0b429;
+      --err: #ff6b7a;
+      --buy: #3dd68c;
+      --sell: #ff6b7a;
+      --radius: 14px;
+      --shadow: 0 16px 40px rgba(0,0,0,.35);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: var(--fg);
+      background:
+        radial-gradient(900px 500px at 15% -5%, #1a2740 0%, transparent 55%),
+        radial-gradient(700px 400px at 100% 0%, #12352f 0%, transparent 45%),
+        var(--bg);
+    }
+    main { max-width: 1280px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+    header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: .9rem; }
+    h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.03em; margin: 0; }
+    .sub { color: var(--mut); margin: .3rem 0 0; font-size: .88rem; line-height: 1.4; }
+    .badge {
+      font-size: .72rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+      border: 1px solid var(--line); background: rgba(61,214,198,.08); color: var(--acc);
+      border-radius: 999px; padding: .35rem .7rem; white-space: nowrap;
+    }
+    .tabs { display: flex; gap: .35rem; margin-bottom: .85rem; flex-wrap: wrap; }
+    .tab {
+      appearance: none; border: 1px solid var(--line); background: transparent; color: var(--mut);
+      border-radius: 999px; padding: .38rem .8rem; font-size: .8rem; font-weight: 600; cursor: pointer;
+    }
+    .tab:hover { color: var(--fg); border-color: #2a3a52; }
+    .tab.active {
+      color: #031412; background: linear-gradient(180deg, #4aebda, #29b5a7); border-color: transparent;
+    }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .grid { display: grid; gap: .85rem; }
+    @media (min-width: 960px) {
+      .grid.deck { grid-template-columns: 1.35fr 1fr; align-items: start; }
+      .grid.deck-bottom { grid-template-columns: 1.2fr .9fr; align-items: start; }
+      .grid.two { grid-template-columns: 1.15fr .85fr; align-items: start; }
+      .grid.copy { grid-template-columns: 1fr 1fr; align-items: start; }
+    }
+    .card {
+      background: color-mix(in srgb, var(--card) 94%, black);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: .95rem 1rem;
+      box-shadow: var(--shadow);
+    }
+    h3 { margin: 0 0 .55rem; font-size: .92rem; }
+    label { display: block; font-size: .74rem; color: var(--mut); margin: 0 0 .3rem; font-weight: 500; }
+    input, textarea, select {
+      width: 100%; background: #0a1018; border: 1px solid var(--line); color: var(--fg);
+      border-radius: 10px; padding: .62rem .75rem; font: inherit; outline: none;
+    }
+    input:focus, textarea:focus, select:focus {
+      border-color: color-mix(in srgb, var(--acc) 55%, var(--line));
+      box-shadow: 0 0 0 3px rgba(61,214,198,.12);
+    }
+    textarea { min-height: 90px; resize: vertical; line-height: 1.4; }
+    .field { margin-bottom: .7rem; }
+    .row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+    .chk { display: flex; align-items: center; gap: .4rem; color: var(--mut); font-size: .82rem; user-select: none; }
+    .chk input { width: auto; }
+    button.primary {
+      appearance: none; border: 0; border-radius: 10px; padding: .7rem .95rem;
+      font-weight: 700; font-size: .9rem; cursor: pointer;
+      background: linear-gradient(180deg, #4aebda, #29b5a7); color: #031412;
+    }
+    button.primary:hover { filter: brightness(1.06); }
+    button.primary.stop { background: linear-gradient(180deg, #ff8a96, #e04a5a); color: #1a0508; }
+    button.sm {
+      appearance: none; border: 0; border-radius: 10px; padding: .5rem .8rem;
+      font-weight: 700; font-size: .8rem; cursor: pointer;
+      background: linear-gradient(180deg, #4aebda, #29b5a7); color: #031412;
+    }
+    button.sm.buy { background: linear-gradient(180deg, #4aeb9a, #29b56a); }
+    button.sm.sell { background: linear-gradient(180deg, #ff8a96, #e04a5a); color: #1a0508; }
+    button.ghost {
+      appearance: none; border: 1px solid var(--line); background: transparent; color: var(--mut);
+      border-radius: 10px; padding: .4rem .65rem; font-size: .78rem; cursor: pointer;
+    }
+    button.ghost:hover { color: var(--fg); border-color: #2a3a52; }
+    .meta { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .65rem; }
+    .pill {
+      border: 1px solid var(--line); border-radius: 999px; padding: .18rem .55rem;
+      font-size: .74rem; color: var(--mut); background: rgba(255,255,255,.02);
+    }
+    .pill.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, var(--line)); }
+    .pill.err { color: var(--err); border-color: color-mix(in srgb, var(--err) 35%, var(--line)); }
+    .pill.live { color: var(--acc); border-color: color-mix(in srgb, var(--acc) 40%, var(--line)); }
+    .plan dl { margin: 0; display: grid; gap: .4rem; }
+    .plan dt { font-size: .7rem; color: var(--mut); text-transform: uppercase; letter-spacing: .04em; }
+    .plan dd { margin: 0; font-size: .88rem; line-height: 1.35; }
+    pre {
+      margin: 0; padding: .85rem; border-radius: 10px; background: #070b11;
+      border: 1px solid var(--line); overflow: auto; max-height: 280px;
+      font-size: .76rem; line-height: 1.45; color: #c9dbf0; white-space: pre-wrap;
+    }
+    .footer { margin-top: .75rem; color: var(--mut); font-size: .72rem; }
+    .hint { font-size: .74rem; color: var(--mut); margin: 0 0 .65rem; line-height: 1.4; }
+
+    .ticker-bar {
+      display: flex; flex-wrap: wrap; gap: .6rem 1.1rem; align-items: baseline;
+      margin-bottom: .7rem; padding-bottom: .6rem; border-bottom: 1px solid var(--line);
+    }
+    .px { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+    .px.up { color: var(--ok); }
+    .px.down { color: var(--err); }
+    .tick-meta { font-size: .78rem; color: var(--mut); font-variant-numeric: tabular-nums; }
+    .chart-wrap {
+      position: relative; width: 100%; height: 300px; background: #070b11;
+      border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+    }
+    .chart-wrap canvas { width: 100%; height: 100%; display: block; }
+    .chart-empty {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      color: var(--mut); font-size: .88rem;
+    }
+    .verdict-banner {
+      display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center;
+      padding: .7rem .85rem; border-radius: 10px; margin-bottom: .7rem;
+      border: 1px solid var(--line); background: rgba(61,214,198,.06);
+    }
+    .verdict-banner strong { font-size: 1.05rem; }
+    .verdict-banner.long { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); background: rgba(61,214,140,.08); }
+    .verdict-banner.short, .verdict-banner.exit { border-color: color-mix(in srgb, var(--err) 45%, var(--line)); background: rgba(255,107,122,.08); }
+    .jspace-log {
+      max-height: 160px; overflow: auto; font-size: .72rem; line-height: 1.35;
+      color: var(--mut); border-top: 1px solid var(--line); margin-top: .55rem; padding-top: .5rem;
+    }
+    .jspace-log .entry { padding: .25rem 0; border-bottom: 1px solid rgba(28,38,54,.5); }
+    .jspace-log .entry .t { color: var(--acc); margin-right: .4rem; }
+    .jspace-log .entry .v { color: var(--fg); font-weight: 600; }
+
+    /* News */
+    .news-list { max-height: 420px; overflow: auto; display: grid; gap: .55rem; }
+    .news-item {
+      padding: .55rem .6rem; border: 1px solid var(--line); border-radius: 10px;
+      background: rgba(0,0,0,.2);
+    }
+    .news-item a { color: var(--fg); text-decoration: none; font-size: .86rem; font-weight: 600; line-height: 1.3; }
+    .news-item a:hover { color: var(--acc); }
+    .news-meta { margin-top: .3rem; font-size: .7rem; color: var(--mut); display: flex; gap: .45rem; flex-wrap: wrap; }
+    .news-sum { margin: .3rem 0 0; font-size: .76rem; color: var(--mut); line-height: 1.35; }
+    .cat {
+      font-size: .65rem; text-transform: uppercase; letter-spacing: .04em;
+      border: 1px solid var(--line); border-radius: 999px; padding: .08rem .4rem; color: var(--acc2);
+    }
+
+    table.ct { width: 100%; border-collapse: collapse; font-size: .78rem; }
+    table.ct th {
+      text-align: left; color: var(--mut); font-weight: 500; font-size: .7rem;
+      text-transform: uppercase; letter-spacing: .04em; padding: .3rem .35rem; border-bottom: 1px solid var(--line);
+    }
+    table.ct td { padding: .35rem; border-bottom: 1px solid rgba(28,38,54,.6); font-variant-numeric: tabular-nums; }
+    .side-buy { color: var(--buy); font-weight: 600; }
+    .side-sell { color: var(--sell); font-weight: 600; }
+    .split-2 { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; }
+    .live-dot {
+      display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+      background: var(--mut); margin-right: .35rem; vertical-align: middle;
+    }
+    .live-dot.on { background: var(--ok); box-shadow: 0 0 8px var(--ok); animation: pulse 1.4s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.45} }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Sniper Trades · Live Deck</h1>
+      <p class="sub">Live AI jspace · chart moves · free 1m feeds · finance news</p>
+    </div>
+    <span class="badge" id="ver">v5.1</span>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="deck" type="button">Live Deck</button>
+    <button class="tab" data-tab="research" type="button">Research</button>
+    <button class="tab" data-tab="copy" type="button">Copy Trade</button>
+  </nav>
+
+  <!-- ═══ LIVE DECK ═══ -->
+  <div class="panel active" id="panel-deck">
+    <section class="card" style="margin-bottom:.85rem">
+      <div class="row" style="align-items:flex-end">
+        <div style="flex:1;min-width:110px">
+          <label for="deckSym">Instrument</label>
+          <input id="deckSym" value="BTC_USDT" spellcheck="false"/>
+        </div>
+        <div style="width:100px">
+          <label for="deckTf">Timeframe</label>
+          <select id="deckTf">
+            <option value="1m" selected>1m</option>
+            <option value="5m">5m</option>
+            <option value="15m">15m</option>
+            <option value="1h">1h</option>
+            <option value="4h">4h</option>
+          </select>
+        </div>
+        <div style="flex:1.2;min-width:140px">
+          <label for="deckQ">Query bias</label>
+          <input id="deckQ" value="live sniper" spellcheck="false"/>
+        </div>
+        <button class="primary" id="deckGo" type="button" style="width:auto;min-width:120px">Start live</button>
+        <button class="ghost" id="deckStop" type="button">Stop</button>
+        <button class="ghost" id="newsRefresh" type="button">Refresh news</button>
+      </div>
+      <div class="meta">
+        <span class="pill" id="deckStatus"><span class="live-dot" id="liveDot"></span>idle</span>
+        <span class="pill" id="deckSrc">feed —</span>
+        <span class="pill" id="deckTick">tick —</span>
+        <span class="pill" id="newsStatus">news —</span>
+      </div>
+    </section>
+
+    <div class="grid deck">
+      <!-- Chart column -->
+      <section class="card">
+        <div class="row" style="justify-content:space-between;margin-bottom:.5rem">
+          <h3 style="margin:0">Live chart</h3>
+          <span class="pill" id="chartTfPill">1m</span>
+        </div>
+        <div class="ticker-bar">
+          <div>
+            <div class="px" id="lastPx">—</div>
+            <div class="tick-meta" id="instLabel">BTC_USDT</div>
+          </div>
+          <div class="tick-meta">bid <strong id="bidPx">—</strong></div>
+          <div class="tick-meta">ask <strong id="askPx">—</strong></div>
+          <div class="tick-meta">24h <strong id="chgPx">—</strong></div>
+          <div class="tick-meta">src <strong id="srcPx">—</strong></div>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-empty" id="chartEmpty">Start live deck for chart moves</div>
+          <canvas id="chart" width="800" height="300"></canvas>
+        </div>
+      </section>
+
+      <!-- AI jspace column -->
+      <section class="card">
+        <div class="row" style="justify-content:space-between">
+          <h3 style="margin:0">AI jspace stream</h3>
+          <span class="pill" id="verdictPill">verdict —</span>
+        </div>
+        <div class="verdict-banner" id="verdictBanner">
+          <strong id="verdictText">—</strong>
+          <span class="pill" id="convPill">conviction —</span>
+        </div>
+        <p id="summaryOut" style="margin:0 0 .65rem;color:var(--acc);font-size:.88rem;line-height:1.4">Waiting for live stream…</p>
+        <h3 style="font-size:.82rem;color:var(--mut)">1 · Live internal thoughts</h3>
+        <pre id="jspaceOut" style="max-height:200px">// jspace updates appear here as price moves</pre>
+        <div class="jspace-log" id="jspaceLog"></div>
+      </section>
+    </div>
+
+    <div class="grid deck-bottom" style="margin-top:.85rem">
+      <section class="card">
+        <h3>2 · Active TradingView analysis</h3>
+        <pre id="tvOut" style="max-height:300px">// tool readings + confluences stream here</pre>
+        <div class="plan" style="margin-top:.75rem">
+          <h3 style="font-size:.82rem;color:var(--mut)">3 · Strategy position</h3>
+          <dl id="plan">
+            <dt>Waiting</dt>
+            <dd>Start live deck for entry / SL / TP / next action.</dd>
+          </dl>
+        </div>
+      </section>
+
+      <!-- Finance news -->
+      <section class="card">
+        <div class="row" style="justify-content:space-between;margin-bottom:.45rem">
+          <h3 style="margin:0">Live finance news</h3>
+          <select id="newsCat" style="width:auto;padding:.35rem .55rem;font-size:.78rem">
+            <option value="">All</option>
+            <option value="crypto">Crypto</option>
+            <option value="markets">Markets</option>
+            <option value="macro">Macro</option>
+          </select>
+        </div>
+        <p class="hint" style="margin:0 0 .55rem">Free RSS: CoinDesk · Cointelegraph · Yahoo · Fed · BBC · CNBC</p>
+        <div class="news-list" id="newsList">
+          <div class="hint">Loading headlines…</div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ═══ RESEARCH ═══ -->
+  <div class="panel" id="panel-research">
+    <div class="grid two">
+      <section class="card">
+        <div class="field">
+          <label for="sid">Session ID</label>
+          <input id="sid" value="console-1" autocomplete="off" spellcheck="false"/>
+        </div>
+        <div class="field">
+          <label for="q">Trade / research query</label>
+          <textarea id="q" placeholder="e.g. long BTC 4h accumulation">long BTC 4h accumulation plan</textarea>
+        </div>
+        <div class="row field">
+          <label class="chk"><input type="checkbox" id="reuse" checked/> Reuse session</label>
+          <label class="chk"><input type="checkbox" id="cf" checked/> Counterfactual</label>
+        </div>
+        <button class="primary" id="go" type="button" style="width:100%">Run research</button>
+        <div class="meta">
+          <span class="pill" id="lat">latency —</span>
+          <span class="pill" id="st">status idle</span>
+          <button class="ghost" id="clear" type="button">Clear session</button>
+          <button class="ghost" id="copyPrompt" type="button">Copy prompt</button>
+        </div>
+      </section>
+      <section class="card plan">
+        <h3>Structured plan</h3>
+        <dl id="planR">
+          <dt>Waiting</dt>
+          <dd>Run research to populate plan.</dd>
+        </dl>
+        <pre id="out" style="margin-top:.75rem;max-height:320px">// JSON</pre>
+      </section>
+    </div>
+  </div>
+
+  <!-- ═══ COPY TRADE ═══ -->
+  <div class="panel" id="panel-copy">
+    <p class="hint">Leaders emit signals; followers mirror. Paper by default. Live = dry-run unless confirm live.</p>
+    <div class="grid copy">
+      <section class="card">
+        <h3>Register leader</h3>
+        <div class="field"><label for="leadName">Name</label><input id="leadName" value="Iron Grid"/></div>
+        <div class="field"><label for="leadSyms">Symbols</label><input id="leadSyms" value="BTC_USDT,ETH_USDT"/></div>
+        <button class="sm" id="btnLeader" type="button" style="width:100%">Add leader</button>
+      </section>
+      <section class="card">
+        <h3>Register follower</h3>
+        <div class="field"><label for="follName">Name</label><input id="follName" value="Paper Bot"/></div>
+        <div class="field"><label for="follLead">Leader ID</label><input id="follLead" placeholder="L_xxxxxxxx"/></div>
+        <div class="split-2 field">
+          <div><label for="follMult">Size mult</label><input id="follMult" type="number" value="1" min="0.01" step="0.1"/></div>
+          <div><label for="follMax">Max $</label><input id="follMax" type="number" value="100" min="1"/></div>
+        </div>
+        <div class="row field">
+          <label class="chk"><input type="radio" name="follMode" value="paper" checked/> Paper</label>
+          <label class="chk"><input type="radio" name="follMode" value="live"/> Live (dry-run)</label>
+        </div>
+        <button class="sm" id="btnFollower" type="button" style="width:100%">Add follower</button>
+      </section>
+    </div>
+    <section class="card" style="margin-top:.85rem">
+      <h3>Emit signal</h3>
+      <div class="row" style="align-items:flex-end">
+        <div style="flex:1;min-width:110px"><label for="sigLead">Leader ID</label><input id="sigLead"/></div>
+        <div style="width:120px"><label for="sigInst">Instrument</label><input id="sigInst" value="BTC_USDT"/></div>
+        <div style="width:90px"><label for="sigNotional">Notional $</label><input id="sigNotional" type="number" value="25"/></div>
+        <label class="chk"><input type="checkbox" id="sigLive"/> Confirm live</label>
+        <button class="sm buy" id="sigBuy" type="button">BUY</button>
+        <button class="sm sell" id="sigSell" type="button">SELL</button>
+      </div>
+    </section>
+    <div class="grid copy" style="margin-top:.85rem">
+      <section class="card">
+        <div class="row" style="justify-content:space-between">
+          <h3 style="margin:0">Leaders &amp; followers</h3>
+          <button class="ghost" id="refreshCopy" type="button">Refresh</button>
+        </div>
+        <div id="copyRoster" style="margin-top:.55rem;overflow:auto;max-height:260px">
+          <p class="hint" style="margin:0">No leaders yet.</p>
+        </div>
+      </section>
+      <section class="card">
+        <h3>Recent fills</h3>
+        <div id="copyFills" style="overflow:auto;max-height:260px">
+          <p class="hint" style="margin:0">Fills appear after auto-copy.</p>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmt(n, d = 2) {
+  if (n == null || Number.isNaN(n)) return '—';
+  return Number(n).toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: 0 });
+}
+function setDeckStatus(ok, text) {
+  const el = $('deckStatus');
+  el.innerHTML = `<span class="live-dot ${ok === true ? 'on' : ''}" id="liveDot"></span>${esc(text)}`;
+  el.className = 'pill ' + (ok === true ? 'live' : ok === false ? 'err' : '');
+}
+
+/* tabs */
+document.querySelectorAll('.tab').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach((b) => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+    btn.classList.add('active');
+    $('panel-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'copy') refreshCopyState();
+    if (btn.dataset.tab === 'deck' && !deckEs) loadNewsOnce();
+  });
+});
+
+/* ── chart ─────────────────────────────────────────────────────────────── */
+let candlesCache = [];
+let lastPrice = null;
+
+function applyTicker(t) {
+  if (!t) return;
+  const px = t.last ?? t.ask ?? t.bid;
+  const el = $('lastPx');
+  el.textContent = fmt(px, px > 100 ? 2 : 6);
+  if (lastPrice != null && px != null) el.className = 'px ' + (px >= lastPrice ? 'up' : 'down');
+  if (px != null) lastPrice = px;
+  $('bidPx').textContent = fmt(t.bid, 2);
+  $('askPx').textContent = fmt(t.ask, 2);
+  $('chgPx').textContent = t.change != null ? (Number(t.change) * 100).toFixed(2) + '%' : '—';
+  $('srcPx').textContent = t.source || '—';
+  $('instLabel').textContent = t.instrument || $('deckSym').value;
+  $('deckSrc').textContent = 'feed ' + (t.source || '—');
+  if (candlesCache.length && px != null) {
+    const last = candlesCache[candlesCache.length - 1];
+    last.c = px;
+    if (px > last.h) last.h = px;
+    if (px < last.l) last.l = px;
+    drawChart(candlesCache);
+  }
+}
+
+function setCandles(candles, source) {
+  candlesCache = candles || [];
+  $('chartEmpty').style.display = candlesCache.length ? 'none' : 'flex';
+  if (!candlesCache.length) $('chartEmpty').textContent = 'No candles';
+  if (source) $('srcPx').textContent = source;
+  drawChart(candlesCache);
+}
+
+function drawChart(candles) {
+  const canvas = $('chart');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const W = Math.max(280, Math.floor(rect.width));
+  const H = 300;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  if (!candles.length) return;
+  const pad = { t: 14, r: 52, b: 20, l: 10 };
+  const plotW = W - pad.l - pad.r, plotH = H - pad.t - pad.b;
+  let hi = -Infinity, lo = Infinity;
+  for (const c of candles) {
+    if (c.h != null && c.h > hi) hi = c.h;
+    if (c.l != null && c.l < lo) lo = c.l;
+  }
+  if (!Number.isFinite(hi) || hi === lo) {
+    hi = (candles[candles.length - 1].c || 1) * 1.01;
+    lo = (candles[candles.length - 1].c || 1) * 0.99;
+  }
+  const range = hi - lo; hi += range * 0.04; lo -= range * 0.04;
+  const n = candles.length, slot = plotW / n, bodyW = Math.max(1, Math.min(9, slot * 0.65));
+  ctx.strokeStyle = '#1c2636'; ctx.lineWidth = 1; ctx.fillStyle = '#5a6a82';
+  ctx.font = '11px ui-sans-serif, system-ui, sans-serif';
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.t + (plotH * i) / 4;
+    const price = hi - ((hi - lo) * i) / 4;
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+    ctx.fillText(fmt(price, price > 100 ? 2 : 4), W - pad.r + 5, y + 3);
+  }
+  const yOf = (p) => pad.t + ((hi - p) / (hi - lo)) * plotH;
+  for (let i = 0; i < n; i++) {
+    const c = candles[i];
+    if (c.o == null || c.c == null) continue;
+    const x = pad.l + slot * i + slot / 2;
+    const up = c.c >= c.o;
+    ctx.strokeStyle = up ? '#3dd68c' : '#ff6b7a';
+    ctx.fillStyle = up ? '#3dd68c' : '#ff6b7a';
+    ctx.beginPath(); ctx.moveTo(x, yOf(c.h)); ctx.lineTo(x, yOf(c.l)); ctx.stroke();
+    const y1 = yOf(c.o), y2 = yOf(c.c);
+    ctx.fillRect(x - bodyW / 2, Math.min(y1, y2), bodyW, Math.max(1, Math.abs(y2 - y1)));
+  }
+  const last = candles[n - 1];
+  if (last && last.c != null) {
+    const y = yOf(last.c);
+    ctx.strokeStyle = 'rgba(61,214,198,.55)'; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+window.addEventListener('resize', () => { if (candlesCache.length) drawChart(candlesCache); });
+
+/* ── jspace / sniper UI ────────────────────────────────────────────────── */
+const jspaceLog = [];
+function pushLog(verdict, summary) {
+  const t = new Date().toLocaleTimeString();
+  jspaceLog.unshift({ t, verdict, summary });
+  if (jspaceLog.length > 24) jspaceLog.pop();
+  $('jspaceLog').innerHTML = jspaceLog.map((e) =>
+    `<div class="entry"><span class="t">${esc(e.t)}</span><span class="v">${esc(e.verdict)}</span> — ${esc((e.summary || '').slice(0, 120))}</div>`
+  ).join('');
+}
+
+function renderPosition(sp, decision, plan) {
+  const d = decision || {};
+  const p = plan || {};
+  const s = sp || {};
+  const dir = s.side || d.direction || '—';
+  const dirClass = String(dir).toLowerCase().includes('long') ? 'side-buy'
+    : (String(dir).toLowerCase().includes('short') || String(dir).toLowerCase() === 'exit') ? 'side-sell' : '';
+  $('plan').innerHTML = `
+    <dt>Side</dt><dd class="${dirClass}"><strong>${esc(dir)}</strong></dd>
+    <dt>Entry</dt><dd>${esc(fmt(s.entry ?? d.entry, 2))}</dd>
+    <dt>Stop</dt><dd>${esc(fmt(s.stop_loss ?? d.stop_loss, 2))}</dd>
+    <dt>TP</dt><dd>TP1 ${esc(fmt(s.take_profit_1 ?? d.take_profit_1, 2))} · TP2 ${esc(fmt(s.take_profit_2 ?? d.take_profit_2, 2))}</dd>
+    <dt>Size / RR</dt><dd>${esc(s.position_size_pct ?? d.position_size_pct ?? '—')}% · RR ${esc(s.risk_reward ?? d.risk_reward ?? '—')}</dd>
+    <dt>Next</dt><dd>${esc(s.next_action || '—')}</dd>
+    <dt>Setup</dt><dd>${esc(p.setup || '—')}</dd>
+  `;
+}
+
+function applySniper(data) {
+  if (data.ticker) applyTicker(data.ticker);
+  if (data.candles && data.candles.length) setCandles(data.candles, (data.data_sources || [])[0]);
+  $('jspaceOut').textContent = data.jspace || data.jspace_thoughts || '// —';
+  $('tvOut').textContent = data.tv_analysis || '// —';
+  const v = data.verdict || {};
+  const dir = v.verdict || (data.trade_decision || {}).direction || '—';
+  $('verdictText').textContent = dir;
+  $('convPill').textContent = 'conviction ' + (v.conviction != null ? v.conviction + '%' : '—') +
+    (v.conviction_label ? ' · ' + v.conviction_label : '');
+  $('summaryOut').textContent = data.summary || v.one_liner || '—';
+  const banner = $('verdictBanner');
+  banner.className = 'verdict-banner ' + String(dir).toLowerCase();
+  $('verdictPill').textContent = 'verdict ' + dir;
+  $('verdictPill').className = 'pill ' + (String(dir).toLowerCase() === 'long' ? 'ok'
+    : (String(dir).toLowerCase() === 'short' || String(dir).toLowerCase() === 'exit') ? 'err' : 'live');
+  renderPosition(data.strategy_position, data.trade_decision, data.plan);
+  pushLog(dir, data.summary || v.one_liner || '');
+  $('deckTick').textContent = 'tick ' + new Date().toLocaleTimeString();
+}
+
+/* ── news ──────────────────────────────────────────────────────────────── */
+function renderNews(payload) {
+  const items = payload.items || [];
+  const cat = $('newsCat').value;
+  const filtered = cat ? items.filter((i) => i.category === cat) : items;
+  if (!filtered.length) {
+    $('newsList').innerHTML = '<div class="hint">No headlines (try Refresh news).</div>';
+    $('newsStatus').textContent = 'news empty';
+    return;
+  }
+  $('newsList').innerHTML = filtered.map((n) => `
+    <article class="news-item">
+      <a href="${esc(n.url || '#')}" target="_blank" rel="noopener noreferrer">${esc(n.title)}</a>
+      <div class="news-meta">
+        <span class="cat">${esc(n.category || 'news')}</span>
+        <span>${esc(n.source)}</span>
+        <span>${n.published_at ? new Date(n.published_at * 1000).toLocaleString() : esc(n.published || '')}</span>
+      </div>
+      ${n.summary ? `<p class="news-sum">${esc(n.summary.slice(0, 180))}${n.summary.length > 180 ? '…' : ''}</p>` : ''}
+    </article>
+  `).join('');
+  $('newsStatus').textContent = 'news ' + filtered.length + (payload.errors && payload.errors.length ? ' · partial' : '');
+  $('newsStatus').className = 'pill live';
+}
+
+async function loadNewsOnce() {
+  try {
+    const cat = $('newsCat').value;
+    const q = cat ? ('&category=' + encodeURIComponent(cat)) : '';
+    const res = await fetch('/news?limit=24' + q);
+    const data = await res.json();
+    renderNews(data);
+  } catch (e) {
+    $('newsList').innerHTML = `<div class="hint">${esc(e)}</div>`;
+    $('newsStatus').textContent = 'news error';
+    $('newsStatus').className = 'pill err';
+  }
+}
+$('newsRefresh').addEventListener('click', loadNewsOnce);
+$('newsCat').addEventListener('change', loadNewsOnce);
+
+/* ── live deck SSE ─────────────────────────────────────────────────────── */
+let deckEs = null;
+
+function stopDeck() {
+  if (deckEs) { try { deckEs.close(); } catch (_) {} deckEs = null; }
+  setDeckStatus(null, 'stopped');
+  $('deckGo').textContent = 'Start live';
+  $('deckGo').classList.remove('stop');
+}
+
+function startDeck() {
+  stopDeck();
+  const sym = $('deckSym').value.trim() || 'BTC_USDT';
+  const tf = $('deckTf').value || '1m';
+  const q = $('deckQ').value.trim() || 'live sniper';
+  $('chartTfPill').textContent = tf;
+  setDeckStatus(null, 'connecting…');
+  const url = `/live/deck?symbol=${encodeURIComponent(sym)}&timeframe=${encodeURIComponent(tf)}&interval_ms=6000&query=${encodeURIComponent(q)}&news_every=2`;
+  deckEs = new EventSource(url);
+  $('deckGo').textContent = 'Live…';
+  deckEs.addEventListener('hello', () => setDeckStatus(true, 'live deck armed'));
+  deckEs.addEventListener('ticker', (ev) => {
+    try { applyTicker(JSON.parse(ev.data)); } catch (_) {}
+  });
+  deckEs.addEventListener('candles', (ev) => {
+    try {
+      const d = JSON.parse(ev.data);
+      setCandles(d.candles, d.source);
+    } catch (_) {}
+  });
+  deckEs.addEventListener('sniper', (ev) => {
+    try {
+      applySniper(JSON.parse(ev.data));
+      setDeckStatus(true, 'live · jspace');
+    } catch (_) {}
+  });
+  deckEs.addEventListener('news', (ev) => {
+    try { renderNews(JSON.parse(ev.data)); } catch (_) {}
+  });
+  deckEs.addEventListener('error', (ev) => {
+    try {
+      const d = JSON.parse(ev.data);
+      setDeckStatus(false, d.error || 'error');
+    } catch (_) {
+      setDeckStatus(false, 'reconnecting…');
+    }
+  });
+  deckEs.onerror = () => setDeckStatus(false, 'stream reconnecting…');
+}
+
+$('deckGo').addEventListener('click', startDeck);
+$('deckStop').addEventListener('click', stopDeck);
+
+/* ── research (single shot) ────────────────────────────────────────────── */
+function setStatus(ok, text) {
+  const el = $('st');
+  el.textContent = text;
+  el.className = 'pill ' + (ok === true ? 'ok' : ok === false ? 'err' : '');
+}
+async function runResearch() {
+  const btn = $('go');
+  btn.disabled = true;
+  setStatus(null, 'running');
+  const t0 = performance.now();
+  try {
+    const res = await fetch('/research/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: $('q').value.trim(),
+        session_id: $('sid').value.trim() || 'console-1',
+        reuse_session: $('reuse').checked,
+        include_counterfactual: $('cf').checked,
+      }),
+    });
+    const data = await res.json();
+    $('out').textContent = JSON.stringify(data, null, 2);
+    const v = data.verdict || {};
+    $('planR').innerHTML = `
+      <dt>Verdict</dt><dd><strong>${esc(v.verdict || (data.trade_decision||{}).direction || '—')}</strong> · ${esc(v.conviction ?? '—')}%</dd>
+      <dt>Summary</dt><dd>${esc(data.summary || '—')}</dd>
+    `;
+    $('lat').textContent = 'latency ' + (data.latency_ms ?? (performance.now() - t0).toFixed(1)) + ' ms';
+    setStatus(res.ok, res.ok ? 'ok · ' + (data.trader || 'Sniper') : 'error');
+  } catch (e) {
+    $('out').textContent = String(e);
+    setStatus(false, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+$('go').addEventListener('click', runResearch);
+$('clear').addEventListener('click', async () => {
+  await fetch('/sessions/' + encodeURIComponent($('sid').value.trim() || 'console-1'), { method: 'DELETE' });
+  setStatus(true, 'session cleared');
+});
+$('copyPrompt').addEventListener('click', async () => {
+  const r = await fetch('/trader/prompt');
+  const d = await r.json();
+  await navigator.clipboard.writeText(d.prompt || '');
+  setStatus(true, 'prompt copied');
+});
+$('q').addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') runResearch();
+});
+
+/* ── copy trade ────────────────────────────────────────────────────────── */
+async function refreshCopyState() {
+  try {
+    const st = await (await fetch('/copy/state')).json();
+    renderRoster(st);
+    renderFills(st.fills || []);
+    if (st.leaders && st.leaders.length) {
+      if (!$('follLead').value) $('follLead').value = st.leaders[0].leader_id;
+      if (!$('sigLead').value) $('sigLead').value = st.leaders[0].leader_id;
+    }
+  } catch (e) {
+    $('copyRoster').innerHTML = `<p class="hint">${esc(e)}</p>`;
+  }
+}
+function renderRoster(st) {
+  const leaders = st.leaders || [], followers = st.followers || [];
+  const bals = st.paper_balances || {}, pos = st.paper_positions || {};
+  if (!leaders.length && !followers.length) {
+    $('copyRoster').innerHTML = '<p class="hint" style="margin:0">No leaders yet.</p>';
+    return;
+  }
+  let html = '<table class="ct"><thead><tr><th>Type</th><th>ID</th><th>Name</th><th>Detail</th></tr></thead><tbody>';
+  for (const L of leaders) {
+    html += `<tr><td>Leader</td><td><code>${esc(L.leader_id)}</code></td><td>${esc(L.name)}</td><td>${esc((L.symbols||[]).join(', '))}</td></tr>`;
+  }
+  for (const F of followers) {
+    const cash = bals[F.follower_id];
+    const p = pos[F.follower_id] || {};
+    const posStr = Object.entries(p).filter(([,q]) => q).map(([i,q]) => `${i}:${Number(q).toFixed(6)}`).join(' ') || 'flat';
+    html += `<tr><td>Follower</td><td><code>${esc(F.follower_id)}</code></td><td>${esc(F.name)}</td>
+      <td>×${F.size_multiplier} · $${F.max_notional_usd} · ${esc(F.mode)} · cash $${fmt(cash,2)} · ${esc(posStr)}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  $('copyRoster').innerHTML = html;
+}
+function renderFills(fills) {
+  if (!fills.length) {
+    $('copyFills').innerHTML = '<p class="hint" style="margin:0">No fills yet.</p>';
+    return;
+  }
+  const rows = fills.slice().reverse().slice(0, 30);
+  let html = '<table class="ct"><thead><tr><th>Side</th><th>Inst</th><th>Qty</th><th>Px</th><th>Status</th></tr></thead><tbody>';
+  for (const f of rows) {
+    html += `<tr><td class="${f.side==='BUY'?'side-buy':'side-sell'}">${esc(f.side)}</td>
+      <td>${esc(f.instrument)}</td><td>${fmt(f.quantity,6)}</td><td>${fmt(f.price,2)}</td>
+      <td>${esc(f.status)} <span style="color:var(--mut)">${esc(f.mode)}</span></td></tr>`;
+  }
+  html += '</tbody></table>';
+  $('copyFills').innerHTML = html;
+}
+$('btnLeader').addEventListener('click', async () => {
+  const symbols = $('leadSyms').value.split(',').map((s) => s.trim()).filter(Boolean);
+  const res = await fetch('/copy/leaders', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: $('leadName').value.trim() || 'Leader', symbols }),
+  });
+  const data = await res.json();
+  if (!res.ok) return alert(data.detail || 'failed');
+  $('follLead').value = data.leader_id;
+  $('sigLead').value = data.leader_id;
+  refreshCopyState();
+});
+$('btnFollower').addEventListener('click', async () => {
+  const mode = document.querySelector('input[name="follMode"]:checked')?.value || 'paper';
+  const res = await fetch('/copy/followers', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: $('follName').value.trim() || 'Follower',
+      leader_id: $('follLead').value.trim(),
+      size_multiplier: Number($('follMult').value) || 1,
+      max_notional_usd: Number($('follMax').value) || 100,
+      mode,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) return alert(data.detail || 'failed');
+  refreshCopyState();
+});
+async function emitSide(side) {
+  const res = await fetch('/copy/signals', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      leader_id: $('sigLead').value.trim(),
+      instrument: $('sigInst').value.trim() || 'BTC_USDT',
+      side, order_type: 'MARKET',
+      notional_usd: Number($('sigNotional').value) || 25,
+      auto_copy: true, confirm_live: $('sigLive').checked,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) return alert(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
+  refreshCopyState();
+}
+$('sigBuy').addEventListener('click', () => emitSide('BUY'));
+$('sigSell').addEventListener('click', () => emitSide('SELL'));
+$('refreshCopy').addEventListener('click', refreshCopyState);
+
+/* boot */
+fetch('/health').then((r) => r.json()).then((d) => {
+  if (d.version) $('ver').textContent = 'v' + d.version;
+}).catch(() => {});
+loadNewsOnce();
+// Auto-start live deck for the immersive experience
+setTimeout(startDeck, 400);
+</script>
+</body>
+</html>

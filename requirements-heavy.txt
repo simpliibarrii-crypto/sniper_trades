@@ -1,0 +1,16 @@
+# Optional / heavy — install only when needed (slow, large)
+lancedb>=0.6.0
+pyarrow>=15.0.0
+neo4j>=5.18.0
+torch>=2.2.0
+transformers>=4.38.0
+accelerate>=0.27.0
+# vllm: skip on many ARM hosts; install manually if supported
+# vllm>=0.4.0
+pdfplumber>=0.11.0
+# openai-whisper: large; optional
+cryptography>=42.0.0
+stellar-sdk>=9.0.0
+web3>=6.15.0
+python-pptx>=0.6.22
+# weasyprint: system deps; optional
