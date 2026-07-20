@@ -320,6 +320,47 @@ async def vendor_asset(asset_path: str):
     return FileResponse(path, media_type=media)
 
 
+@app.get("/app.css")
+async def app_css():
+    """External stylesheet — Chrome DevTools Workspace can map this file for live CSS edits."""
+    path = _UI_DIR / "app.css"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="app.css missing")
+    return FileResponse(
+        path,
+        media_type="text/css",
+        headers={
+            "Cache-Control": "no-store, max-age=0",
+            "Access-Control-Allow-Origin": "*",
+        },
+    )
+
+
+@app.get("/ui/{asset_path:path}")
+async def ui_asset(asset_path: str):
+    """Expose ui/ for Chrome DevTools filesystem mapping (CSS/JS only)."""
+    safe = Path(asset_path)
+    if ".." in safe.parts:
+        raise HTTPException(status_code=400, detail="invalid path")
+    path = (_UI_DIR / safe).resolve()
+    root = _UI_DIR.resolve()
+    if not str(path).startswith(str(root)) or not path.is_file():
+        raise HTTPException(status_code=404, detail="not found")
+    suffix = path.suffix.lower()
+    media = {
+        ".css": "text/css",
+        ".js": "application/javascript",
+        ".html": "text/html",
+        ".webmanifest": "application/manifest+json",
+        ".json": "application/json",
+    }.get(suffix, "application/octet-stream")
+    return FileResponse(
+        path,
+        media_type=media,
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
+
+
 @app.post("/ledger/warmup")
 async def ledger_warmup():
     """Force-prefetch common markets into the embedded ledger."""
@@ -561,7 +602,11 @@ async def ready():
 @app.get("/", response_class=HTMLResponse)
 async def ui_home():
     if _UI.is_file():
-        return FileResponse(_UI, media_type="text/html; charset=utf-8")
+        return FileResponse(
+            _UI,
+            media_type="text/html; charset=utf-8",
+            headers={"Cache-Control": "no-store, max-age=0"},
+        )
     return HTMLResponse("<h1>Sniper Trades</h1><p>UI missing — API still up.</p>")
 
 
