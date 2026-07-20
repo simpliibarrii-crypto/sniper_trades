@@ -7,6 +7,7 @@ TradingView-style tools are computed locally (no TV dependency).
 
 from __future__ import annotations
 
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -14,31 +15,39 @@ from typing import Any, Dict, List, Optional, Tuple
 # ═══════════════════════════════════════════════════════════════════════════
 
 LIVE_SNIPER_TRADER_PROMPT = """
-You are Sniper Trades, a precision AI Crypto Trading Agent. You actively display and execute your full trading strategy live using every TradingView tool with laser focus.
+You are RavenTrade-Core, the crypto-only intelligence layer inside Sniper Trades.
+You monitor liquid centralized-market pairs, crypto news, new DEX token profiles,
+and supported on-chain signals. Macro information is used only when it changes
+crypto risk. Never pretend the available feeds cover every token or metric.
+The jspace / J-Space view is the visible decision-audit layer for evidence, bias, and counter-cases;
+it is not a claim that private chain-of-thought or consciousness is exposed.
 
-LIVE DISPLAY RULES:
-- For every market update or price movement, visibly show your complete sniper analysis in the chat.
-- Explicitly reference and describe in detail ALL relevant TradingView tools: Candles, Volume Profile, Order Blocks, Fibonacci, RSI, MACD, Bollinger Bands, Ichimoku, EMAs, Support/Resistance, Trendlines, etc.
-- Update multiple timeframes live and highlight high-probability confluences.
-- Prefer free public market data (Binance / Kraken / Coinbase, 1m capable); never invent fills or balances.
-- Paper / dry-run first. Live orders only after explicit user CONFIRM.
-- Stay sharp, patient, and ruthless with risk. Only take high-probability setups. Announce tool flips instantly.
+DEFENSE RULES:
+- Capital preservation outranks activity. Default to Hold/cash when signals split.
+- Risk at stop defaults to 1% and is hard-capped at 2%; meme coins should be lower.
+- Never invent balances, fills, funding, open interest, liquidations, or wallet state.
+- Never request a seed phrase or private key. A wallet must sign every transaction.
+- "Trade Now" opens a reviewed ticket or external DEX handoff; it is not silent execution.
+- Leverage remains locked unless collateral, liquidation distance, funding, open
+  interest, and liquidation data are all verified.
 
-RESPONSE STRUCTURE (always use this format):
-1. **jspace (Live Internal Thoughts)**:
-   - Real-time reasoning as price moves.
-   - Why this setup is a sniper opportunity (or not).
-   - Any confirmation bias detected and how you're countering it.
+LIVE TOOL RULES:
+- Show observable evidence and concise decision rationale, never private chain-of-thought.
+- Display supported local indicator equivalents: candles, predictive volume pressure,
+  RSI, MACD, Bollinger Bands, ATR, moving averages, pivots, Fibonacci, simplified
+  Ichimoku, volume profile, support/resistance, and approximate order blocks.
+- Label approximations honestly; do not claim native TradingView drawing tools or Pine
+  execution are active when they are not.
+- Cross-check multiple timeframes and announce material tool flips.
 
-2. **Active TradingView Analysis**:
-   - Every tool used and its current reading.
-   - Key levels, patterns, and sniper confluences.
-
-3. **Current Strategy Position**:
-   - Open trades with entry, SL, TP.
-   - Suggested next precision action.
-
-4. **Live Sniper Verdict**: Clear "Hold / Long / Short / Exit" with conviction level.
+RESPONSE FLOW:
+1. Cognitive Core Status — evidence, bias check, counter-case.
+2. Market Horizon Scan — price, volatility, multi-timeframe structure.
+3. Shadow Network Intel — crypto news, regulation, on-chain/DEX discovery.
+4. Tool Talons Deployed — live readings and predictive-volume state.
+5. Decision Forge — Hold / Long / Short / Exit, invalidation, worst case.
+6. Wallet Nest Status — connected public address data or explicitly disconnected.
+7. Next Flight Path — Live Sniper Verdict and guarded next action; paper first.
 """.strip()
 
 # Back-compat alias used by older imports / skills
@@ -65,6 +74,126 @@ def _lows(candles: List[Dict[str, Any]]) -> List[float]:
 
 def _vols(candles: List[Dict[str, Any]]) -> List[float]:
     return [float(c.get("v") or 0.0) for c in candles]
+
+
+_TIMEFRAME_MS = {
+    "1m": 60_000,
+    "3m": 180_000,
+    "5m": 300_000,
+    "15m": 900_000,
+    "30m": 1_800_000,
+    "1h": 3_600_000,
+    "2h": 7_200_000,
+    "4h": 14_400_000,
+    "6h": 21_600_000,
+    "12h": 43_200_000,
+    "1d": 86_400_000,
+    "1D": 86_400_000,
+    "1w": 604_800_000,
+    "1W": 604_800_000,
+}
+
+
+def predictive_volume_pressure(
+    candles: List[Dict[str, Any]],
+    timeframe: str,
+    *,
+    now_ms: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Forecast volume expansion and directional pressure from observable OHLCV.
+
+    The result is a probabilistic pressure heuristic, not a promise about the next
+    price. When the last candle is still open, its volume is projected to the close.
+    """
+    if len(candles) < 8:
+        return {
+            "bias": "unavailable",
+            "pressure_score": 0.0,
+            "confidence": 0,
+            "current_ratio": None,
+            "projected_ratio": None,
+            "trend_ratio": None,
+            "zscore": None,
+            "is_live_candle": False,
+            "read": "insufficient volume history",
+        }
+
+    now_ms = float(now_ms if now_ms is not None else time.time() * 1000)
+    duration = _TIMEFRAME_MS.get(timeframe, _TIMEFRAME_MS.get(timeframe.lower(), 0))
+    raw_t = candles[-1].get("t")
+    try:
+        opened_ms = float(raw_t)
+        if 1_000_000_000 <= opened_ms < 100_000_000_000:
+            opened_ms *= 1000
+    except (TypeError, ValueError):
+        opened_ms = 0.0
+    is_live = bool(
+        duration
+        and opened_ms > 1_000_000_000_000
+        and opened_ms <= now_ms < opened_ms + duration * 1.15
+    )
+
+    signal = candles[-1]
+    history = candles[:-1]
+    history_vols = [float(row.get("v") or 0) for row in history[-20:]]
+    positive = [value for value in history_vols if value > 0]
+    average = sum(positive) / len(positive) if positive else 0.0
+    signal_volume = float(signal.get("v") or 0)
+    current_ratio = signal_volume / average if average else None
+    elapsed = 1.0
+    if is_live and duration:
+        elapsed = min(1.0, max(0.08, (now_ms - opened_ms) / duration))
+    projected_volume = signal_volume / elapsed if is_live else signal_volume
+    projected_ratio = projected_volume / average if average else None
+    if projected_ratio is not None:
+        projected_ratio = min(projected_ratio, 8.0)
+
+    prior = history_vols[-10:]
+    recent_mean = sum(prior[-3:]) / min(3, len(prior)) if prior else 0.0
+    older = prior[:-3]
+    older_mean = sum(older) / len(older) if older else average
+    trend_ratio = recent_mean / older_mean if older_mean else None
+    variance = (
+        sum((value - average) ** 2 for value in positive) / len(positive)
+        if positive
+        else 0.0
+    )
+    zscore = (projected_volume - average) / (variance**0.5) if variance > 0 else 0.0
+
+    open_px = float(signal.get("o") or signal.get("c") or 0)
+    close_px = float(signal.get("c") or open_px)
+    high = float(signal.get("h") or max(open_px, close_px))
+    low = float(signal.get("l") or min(open_px, close_px))
+    candle_range = max(high - low, abs(close_px) * 1e-9, 1e-12)
+    close_location = max(-1.0, min(1.0, ((close_px - low) / candle_range) * 2 - 1))
+    previous_close = float(history[-1].get("c") or open_px) if history else open_px
+    return_sign = 1.0 if close_px > previous_close else -1.0 if close_px < previous_close else 0.0
+    direction = close_location * 0.65 + return_sign * 0.35
+    expansion = min(projected_ratio or 0.0, 2.5)
+    trend_component = max(-1.0, min(1.0, (trend_ratio or 1.0) - 1.0))
+    score = max(-100.0, min(100.0, direction * expansion * 38 + trend_component * 18))
+    if score >= 22:
+        bias = "bullish pressure"
+    elif score <= -22:
+        bias = "bearish pressure"
+    else:
+        bias = "neutral / unresolved"
+    history_confidence = min(35, len(positive) * 2)
+    signal_confidence = min(35, abs(score) * 0.35)
+    expansion_confidence = min(20, abs((projected_ratio or 1.0) - 1.0) * 18)
+    confidence = int(min(90, 10 + history_confidence + signal_confidence + expansion_confidence))
+    ratio_text = f"{projected_ratio:.2f}x projected" if projected_ratio is not None else "volume n/a"
+    return {
+        "bias": bias,
+        "pressure_score": round(score, 1),
+        "confidence": confidence,
+        "current_ratio": round(current_ratio, 3) if current_ratio is not None else None,
+        "projected_ratio": round(projected_ratio, 3) if projected_ratio is not None else None,
+        "trend_ratio": round(trend_ratio, 3) if trend_ratio is not None else None,
+        "zscore": round(zscore, 2),
+        "is_live_candle": is_live,
+        "read": f"{bias}; {ratio_text}; pressure {score:+.1f}/100; confidence {confidence}%",
+    }
 
 
 def sma(series: List[float], n: int) -> Optional[float]:
@@ -445,6 +574,14 @@ def analyze_timeframe(
         }
     )
 
+    volume_forecast = predictive_volume_pressure(candles, timeframe)
+    tools.append(
+        {
+            "tool": "Predictive Volume Engine",
+            "reading": volume_forecast["read"],
+        }
+    )
+
     # Order blocks (approx last strong impulse candle)
     tools.append(
         {
@@ -475,6 +612,7 @@ def analyze_timeframe(
         "fib": fib,
         "support": sup if len(candles) >= 20 else (pv.get("s1") if pv else None),
         "resistance": res if len(candles) >= 20 else (pv.get("r1") if pv else None),
+        "volume_forecast": volume_forecast,
         "bars": len(candles),
     }
 
@@ -607,6 +745,14 @@ def raven_analyze(
     scores = [a["bias_score"] for a in analyses.values()]
     mtf_score = sum(scores) / len(scores) if scores else 0.0
     labels = [f"{tf}:{a['bias_label']}" for tf, a in analyses.items()]
+    bull_tfs = sum(1 for a in analyses.values() if a["bias_score"] > 0.3)
+    bear_tfs = sum(1 for a in analyses.values() if a["bias_score"] < -0.3)
+    aligned = [
+        tf
+        for tf, analysis in analyses.items()
+        if analysis["bias_score"] * mtf_score > 0
+        and abs(analysis["bias_score"]) > 0.3
+    ]
 
     # User stance vs market — detect confirmation bias
     bias_notes: List[str] = []
@@ -635,14 +781,10 @@ def raven_analyze(
             "and tool flips that kill the sniper thesis."
         )
 
-    # Direction decision → sniper verdict vocabulary
-    if mtf_score >= 0.45 and stance_hint != "short_bias":
+    # Direction comes from market evidence, never merely from the user's requested bias.
+    if mtf_score >= 0.45 and stance_hint != "short_bias" and bull_tfs >= 2:
         direction = "Long"
-    elif mtf_score <= -0.45 and stance_hint != "long_bias":
-        direction = "Short"
-    elif stance_hint == "long_bias" and mtf_score >= -0.15:
-        direction = "Long"
-    elif stance_hint == "short_bias" and mtf_score <= 0.15:
+    elif mtf_score <= -0.45 and stance_hint != "long_bias" and bear_tfs >= 2:
         direction = "Short"
     else:
         direction = "Hold"
@@ -651,6 +793,7 @@ def raven_analyze(
     support = (primary or {}).get("support")
     resistance = (primary or {}).get("resistance")
     rsi_v = (primary or {}).get("rsi")
+    volume_forecast = (primary or {}).get("volume_forecast") or {}
 
     if last and atr_v:
         if direction == "Long":
@@ -660,7 +803,7 @@ def raven_analyze(
             if resistance and resistance > entry:
                 tp1 = max(tp1, float(resistance))
             tp2 = entry + 3.0 * atr_v
-            leverage = "1–3x (spot preferred; perps only if funded risk ≤1%)"
+            leverage = "1x spot only — derivatives locked until funding/OI/liquidations are verified"
         elif direction == "Short":
             entry = float(last)
             stop = min(entry + 1.5 * atr_v, float(resistance or entry + 2 * atr_v))
@@ -668,7 +811,7 @@ def raven_analyze(
             if support and support < entry:
                 tp1 = min(tp1, float(support))
             tp2 = entry - 3.0 * atr_v
-            leverage = "1–2x max (shorts bleed on funding + squeeze risk)"
+            leverage = "paper/reduce-only — leveraged shorts locked without derivatives telemetry"
         else:
             entry = float(last)
             stop = entry - 1.5 * atr_v
@@ -685,12 +828,28 @@ def raven_analyze(
     if entry and stop and tp1 and abs(entry - stop) > 0:
         rr = abs(tp1 - entry) / abs(entry - stop)
 
-    # High-probability gate: thin edge → Hold
+    gate_reasons: List[str] = []
+    projected_ratio = volume_forecast.get("projected_ratio")
+    volume_bias = str(volume_forecast.get("bias") or "unavailable")
+    if direction in ("Long", "Short") and len(analyses) < 2:
+        gate_reasons.append("fewer than two verified timeframes")
+    if direction in ("Long", "Short") and bull_tfs and bear_tfs:
+        gate_reasons.append("bullish and bearish timeframes conflict")
+    if direction == "Long" and volume_bias == "bearish pressure":
+        gate_reasons.append("predictive volume pressure opposes the long")
+    if direction == "Short" and volume_bias == "bullish pressure":
+        gate_reasons.append("predictive volume pressure opposes the short")
+    if direction in ("Long", "Short") and projected_ratio is not None and projected_ratio < 0.6:
+        gate_reasons.append("projected volume is below 0.6x baseline")
     if direction in ("Long", "Short") and rr is not None and rr < 1.5:
+        gate_reasons.append("risk/reward is below 1.5")
+
+    # High-probability gate: any unresolved hard conflict defaults to cash.
+    if direction in ("Long", "Short") and gate_reasons:
         direction = "Hold"
-        leverage = "0x — RR below sniper threshold (1.5)"
+        leverage = "0x — defense gate blocked new risk"
         size_pct = 0.0
-        risk_note = "0% — RR insufficient for sniper entry"
+        risk_note = "0% — " + "; ".join(gate_reasons)
     elif direction == "Hold":
         size_pct = 0.0
         risk_note = "0% — observe only"
@@ -741,7 +900,6 @@ def raven_analyze(
 
     # Confluences
     confluences: List[str] = []
-    aligned = [tf for tf, a in analyses.items() if a["bias_score"] * mtf_score > 0 and abs(a["bias_score"]) > 0.3]
     if len(aligned) >= 3:
         confluences.append(f"MTF alignment on {', '.join(aligned)} (sniper confluence)")
     if rsi_v is not None and direction == "Long" and 40 <= rsi_v <= 65:
@@ -766,13 +924,15 @@ def raven_analyze(
     if rsi_v and rsi_v < 30 and direction == "Short":
         conflicts.append("RSI oversold vs Short → squeeze risk")
         tool_flips.append("RSI flip risk: oversold bounce")
-    bull_tfs = sum(1 for a in analyses.values() if a["bias_score"] > 0.3)
-    bear_tfs = sum(1 for a in analyses.values() if a["bias_score"] < -0.3)
     if bull_tfs and bear_tfs:
         conflicts.append(
             f"MTF split: {bull_tfs} bullish TF vs {bear_tfs} bearish TF → Hold bias"
         )
         tool_flips.append("Composite TF bias split")
+    for reason in gate_reasons:
+        note = f"Defense gate: {reason}"
+        if note not in conflicts:
+            conflicts.append(note)
     if not conflicts:
         conflicts.append("No major hard conflicts; residual risk is news/gap and liquidity.")
 
@@ -898,6 +1058,7 @@ def raven_analyze(
                 "rsi": a["rsi"],
                 "atr": a["atr"],
                 "last": a["last"],
+                "volume_forecast": a.get("volume_forecast"),
             }
             for tf, a in analyses.items()
         },
@@ -1078,15 +1239,20 @@ def format_sniper_response(
     verdict: Dict[str, Any],
 ) -> str:
     sp = strategy_position
-    body = f"""1. **jspace (Live Internal Thoughts)**:
+    body = f"""1. **Cognitive Core Status — Raven Eye Open**:
 {jspace}
 
-2. **Active TradingView Analysis**:
+2. **Market Horizon Scan**:
+- Instrument: `{sp.get('instrument')}`
+- Status: {sp.get('status')} · Side: **{sp.get('side')}**
+
+3. **Shadow Network Intel**:
+- News/on-chain context is attached when those feeds are available; missing feeds never count as confirmation.
+
+4. **Tool Talons Deployed — Active TradingView Analysis**:
 {tv_analysis}
 
-3. **Current Strategy Position**:
-- Status: {sp.get('status')} · Side: **{sp.get('side')}**
-- Instrument: `{sp.get('instrument')}`
+5. **Decision Forge — Current Strategy Position**:
 - Entry: {_fmt(sp.get('entry'))}
 - Stop-loss: {_fmt(sp.get('stop_loss'))}
 - Take-profit: TP1 {_fmt(sp.get('take_profit_1'))} · TP2 {_fmt(sp.get('take_profit_2'))}
@@ -1095,7 +1261,9 @@ def format_sniper_response(
 - Risk/Reward: {_fmt(sp.get('risk_reward'), 2) if sp.get('risk_reward') is not None else 'n/a'}
 - Next precision action: {sp.get('next_action')}
 
-4. **Live Sniper Verdict**: **{verdict.get('verdict')}** · conviction {verdict.get('conviction')}% ({verdict.get('conviction_label')})
+6. **Wallet Nest Status**: Disconnected unless an explicitly connected public wallet snapshot is supplied. No balance inferred.
+
+7. **Next Flight Path — Live Sniper Verdict**: **{verdict.get('verdict')}** · conviction {verdict.get('conviction')}% ({verdict.get('conviction_label')})
 {verdict.get('one_liner')}
 """
     return body.strip()

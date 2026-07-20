@@ -3,24 +3,34 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Sniper Trades · Live Deck</title>
+  <title>RavenTrade Core · Crypto Intelligence</title>
   <style>
     :root {
       color-scheme: dark;
-      --bg: #070a0f;
-      --card: #0f1520;
-      --fg: #eaf0f8;
-      --mut: #8b9bb4;
-      --acc: #3dd6c6;
-      --acc2: #6ea8ff;
-      --line: #1c2636;
-      --ok: #3dd68c;
-      --warn: #f0b429;
-      --err: #ff6b7a;
-      --buy: #3dd68c;
-      --sell: #ff6b7a;
-      --radius: 14px;
-      --shadow: 0 16px 40px rgba(0,0,0,.35);
+      --bg: #08050d;
+      --card: #140d20;
+      --card2: #1b102c;
+      --fg: #fffaff;
+      --mut: #b8a9c9;
+      --acc: #b86cff;
+      --acc2: #f0ddff;
+      --line: #3d2857;
+      --ok: #d7b5ff;
+      --warn: #ffc857;
+      --err: #ff699c;
+      --buy: #dcbcff;
+      --sell: #ff78a8;
+      --radius: 17px;
+      --shadow: 0 18px 50px rgba(4,0,10,.48), 0 0 0 1px rgba(184,108,255,.025);
+      --glow: 0 0 24px rgba(184,108,255,.18);
+      --glass: rgba(18,10,30,.9);
+    }
+    body[data-theme="light"] {
+      color-scheme: light;
+      --bg: #f8f4ff; --card: #ffffff; --card2:#f2e9ff; --fg: #21132e; --mut: #756485;
+      --acc: #7c2dd0; --acc2: #4b116e; --line: #dfd0ed; --ok: #6d28d9;
+      --warn: #9b5d00; --err: #c62e67; --buy: #7131bd; --sell: #c62e67;
+      --shadow: 0 16px 40px rgba(67,28,95,.12); --glow:0 0 20px rgba(124,45,208,.12); --glass: rgba(255,255,255,.92);
     }
     * { box-sizing: border-box; }
     body {
@@ -28,17 +38,27 @@
       font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       color: var(--fg);
       background:
-        radial-gradient(900px 500px at 15% -5%, #1a2740 0%, transparent 55%),
-        radial-gradient(700px 400px at 100% 0%, #12352f 0%, transparent 45%),
+        linear-gradient(rgba(184,108,255,.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(184,108,255,.025) 1px, transparent 1px),
+        radial-gradient(900px 500px at 15% -5%, rgba(114,45,168,.38) 0%, transparent 58%),
+        radial-gradient(700px 400px at 100% 0%, rgba(218,184,255,.15) 0%, transparent 48%),
         var(--bg);
+      background-size: 42px 42px, 42px 42px, auto, auto, auto;
     }
     main { max-width: 1280px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
     header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: .9rem; }
+    .brand { display:flex; align-items:center; gap:.7rem; }
+    .brand-mark {
+      width:38px; height:38px; display:grid; place-items:center; border-radius:12px;
+      color:#180522; font-weight:900; background:linear-gradient(145deg,#fff,#b86cff 72%);
+      box-shadow:0 8px 28px rgba(184,108,255,.4); transform:rotate(-3deg);
+    }
+    .header-actions { display:flex; align-items:center; justify-content:flex-end; gap:.4rem; flex-wrap:wrap; }
     h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.03em; margin: 0; }
     .sub { color: var(--mut); margin: .3rem 0 0; font-size: .88rem; line-height: 1.4; }
     .badge {
       font-size: .72rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
-      border: 1px solid var(--line); background: rgba(61,214,198,.08); color: var(--acc);
+      border: 1px solid var(--line); background: rgba(184,108,255,.1); color: var(--acc2);
       border-radius: 999px; padding: .35rem .7rem; white-space: nowrap;
     }
     .tabs { display: flex; gap: .35rem; margin-bottom: .85rem; flex-wrap: wrap; }
@@ -46,12 +66,20 @@
       appearance: none; border: 1px solid var(--line); background: transparent; color: var(--mut);
       border-radius: 999px; padding: .38rem .8rem; font-size: .8rem; font-weight: 600; cursor: pointer;
     }
-    .tab:hover { color: var(--fg); border-color: #2a3a52; }
+    .tab:hover { color: var(--fg); border-color: #765094; box-shadow:var(--glow); }
     .tab.active {
-      color: #031412; background: linear-gradient(180deg, #4aebda, #29b5a7); border-color: transparent;
+      color: #180522; background: linear-gradient(180deg, #fff, #c88cff); border-color: transparent;
     }
     .panel { display: none; }
     .panel.active { display: block; }
+    .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:.7rem; margin-bottom:.85rem; }
+    .kpi {
+      background:linear-gradient(145deg,color-mix(in srgb,var(--card) 91%,var(--acc) 9%),var(--card));
+      border:1px solid var(--line); border-radius:12px; padding:.75rem .85rem; box-shadow:var(--shadow);
+    }
+    .kpi-label { display:flex; align-items:center; justify-content:space-between; color:var(--mut); font-size:.68rem; text-transform:uppercase; letter-spacing:.07em; }
+    .kpi-value { margin-top:.32rem; font-size:1.12rem; font-weight:760; font-variant-numeric:tabular-nums; letter-spacing:-.025em; }
+    .kpi-note { margin-top:.18rem; font-size:.68rem; color:var(--mut); }
     .grid { display: grid; gap: .85rem; }
     @media (min-width: 960px) {
       .grid.deck { grid-template-columns: 1.35fr 1fr; align-items: start; }
@@ -60,7 +88,7 @@
       .grid.copy { grid-template-columns: 1fr 1fr; align-items: start; }
     }
     .card {
-      background: color-mix(in srgb, var(--card) 94%, black);
+      background: linear-gradient(145deg,color-mix(in srgb,var(--card) 96%,white 4%),color-mix(in srgb,var(--card) 96%,black));
       border: 1px solid var(--line);
       border-radius: var(--radius);
       padding: .95rem 1rem;
@@ -69,12 +97,12 @@
     h3 { margin: 0 0 .55rem; font-size: .92rem; }
     label { display: block; font-size: .74rem; color: var(--mut); margin: 0 0 .3rem; font-weight: 500; }
     input, textarea, select {
-      width: 100%; background: #0a1018; border: 1px solid var(--line); color: var(--fg);
+      width: 100%; background: color-mix(in srgb,var(--card) 75%,var(--bg)); border: 1px solid var(--line); color: var(--fg);
       border-radius: 10px; padding: .62rem .75rem; font: inherit; outline: none;
     }
     input:focus, textarea:focus, select:focus {
       border-color: color-mix(in srgb, var(--acc) 55%, var(--line));
-      box-shadow: 0 0 0 3px rgba(61,214,198,.12);
+      box-shadow: 0 0 0 3px rgba(184,108,255,.15);
     }
     textarea { min-height: 90px; resize: vertical; line-height: 1.4; }
     .field { margin-bottom: .7rem; }
@@ -84,22 +112,24 @@
     button.primary {
       appearance: none; border: 0; border-radius: 10px; padding: .7rem .95rem;
       font-weight: 700; font-size: .9rem; cursor: pointer;
-      background: linear-gradient(180deg, #4aebda, #29b5a7); color: #031412;
+      background: linear-gradient(180deg, #fff, #c178ff); color: #21052e;
+      box-shadow:var(--glow);
     }
     button.primary:hover { filter: brightness(1.06); }
+    button:disabled { opacity:.5; cursor:not-allowed; }
     button.primary.stop { background: linear-gradient(180deg, #ff8a96, #e04a5a); color: #1a0508; }
     button.sm {
       appearance: none; border: 0; border-radius: 10px; padding: .5rem .8rem;
       font-weight: 700; font-size: .8rem; cursor: pointer;
-      background: linear-gradient(180deg, #4aebda, #29b5a7); color: #031412;
+      background: linear-gradient(180deg, #fff, #c178ff); color: #21052e;
     }
-    button.sm.buy { background: linear-gradient(180deg, #4aeb9a, #29b56a); }
+    button.sm.buy { background: linear-gradient(180deg, #fff, #c69aff); }
     button.sm.sell { background: linear-gradient(180deg, #ff8a96, #e04a5a); color: #1a0508; }
     button.ghost {
       appearance: none; border: 1px solid var(--line); background: transparent; color: var(--mut);
       border-radius: 10px; padding: .4rem .65rem; font-size: .78rem; cursor: pointer;
     }
-    button.ghost:hover { color: var(--fg); border-color: #2a3a52; }
+    button.ghost:hover { color: var(--fg); border-color: #765094; box-shadow:var(--glow); }
     .meta { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .65rem; }
     .pill {
       border: 1px solid var(--line); border-radius: 999px; padding: .18rem .55rem;
@@ -112,12 +142,16 @@
     .plan dt { font-size: .7rem; color: var(--mut); text-transform: uppercase; letter-spacing: .04em; }
     .plan dd { margin: 0; font-size: .88rem; line-height: 1.35; }
     pre {
-      margin: 0; padding: .85rem; border-radius: 10px; background: #070b11;
+      margin: 0; padding: .85rem; border-radius: 10px; background: color-mix(in srgb,var(--bg) 85%,black 15%);
       border: 1px solid var(--line); overflow: auto; max-height: 280px;
-      font-size: .76rem; line-height: 1.45; color: #c9dbf0; white-space: pre-wrap;
+      font-size: .76rem; line-height: 1.45; color: var(--acc2); white-space: pre-wrap;
     }
     .footer { margin-top: .75rem; color: var(--mut); font-size: .72rem; }
     .hint { font-size: .74rem; color: var(--mut); margin: 0 0 .65rem; line-height: 1.4; }
+    .eyebrow { margin:0 0 .25rem; color:var(--acc); text-transform:uppercase; letter-spacing:.12em; font-weight:750; font-size:.66rem; }
+    .section-head { display:flex; justify-content:space-between; align-items:flex-start; gap:.8rem; margin-bottom:.65rem; }
+    .section-head h3 { margin:0; }
+    .disclosure { padding:.6rem .7rem; border:1px solid color-mix(in srgb,var(--warn) 30%,var(--line)); background:rgba(240,180,41,.06); border-radius:10px; font-size:.72rem; color:var(--mut); line-height:1.4; }
 
     .ticker-bar {
       display: flex; flex-wrap: wrap; gap: .6rem 1.1rem; align-items: baseline;
@@ -128,7 +162,7 @@
     .px.down { color: var(--err); }
     .tick-meta { font-size: .78rem; color: var(--mut); font-variant-numeric: tabular-nums; }
     .chart-wrap {
-      position: relative; width: 100%; height: 300px; background: #070b11;
+      position: relative; width: 100%; height: 300px; background: color-mix(in srgb,var(--bg) 87%,black 13%);
       border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
     }
     .chart-wrap canvas { width: 100%; height: 100%; display: block; }
@@ -139,16 +173,16 @@
     .verdict-banner {
       display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center;
       padding: .7rem .85rem; border-radius: 10px; margin-bottom: .7rem;
-      border: 1px solid var(--line); background: rgba(61,214,198,.06);
+      border: 1px solid var(--line); background: rgba(184,108,255,.08);
     }
     .verdict-banner strong { font-size: 1.05rem; }
-    .verdict-banner.long { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); background: rgba(61,214,140,.08); }
+    .verdict-banner.long { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); background: rgba(184,108,255,.12); }
     .verdict-banner.short, .verdict-banner.exit { border-color: color-mix(in srgb, var(--err) 45%, var(--line)); background: rgba(255,107,122,.08); }
     .jspace-log {
       max-height: 160px; overflow: auto; font-size: .72rem; line-height: 1.35;
       color: var(--mut); border-top: 1px solid var(--line); margin-top: .55rem; padding-top: .5rem;
     }
-    .jspace-log .entry { padding: .25rem 0; border-bottom: 1px solid rgba(28,38,54,.5); }
+    .jspace-log .entry { padding: .25rem 0; border-bottom: 1px solid rgba(110,72,143,.35); }
     .jspace-log .entry .t { color: var(--acc); margin-right: .4rem; }
     .jspace-log .entry .v { color: var(--fg); font-weight: 600; }
 
@@ -172,36 +206,214 @@
       text-align: left; color: var(--mut); font-weight: 500; font-size: .7rem;
       text-transform: uppercase; letter-spacing: .04em; padding: .3rem .35rem; border-bottom: 1px solid var(--line);
     }
-    table.ct td { padding: .35rem; border-bottom: 1px solid rgba(28,38,54,.6); font-variant-numeric: tabular-nums; }
+    table.ct td { padding: .35rem; border-bottom: 1px solid rgba(110,72,143,.35); font-variant-numeric: tabular-nums; }
     .side-buy { color: var(--buy); font-weight: 600; }
     .side-sell { color: var(--sell); font-weight: 600; }
     .split-2 { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; }
+    .split-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:.55rem; }
+    .result-box { margin-top:.7rem; padding:.75rem; border-radius:10px; border:1px solid var(--line); background:rgba(184,108,255,.07); }
+    .result-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:.55rem; }
+    .result-grid b { display:block; margin-top:.18rem; font-size:.9rem; font-variant-numeric:tabular-nums; }
+    .result-grid span { color:var(--mut); font-size:.66rem; text-transform:uppercase; letter-spacing:.05em; }
+    .warning-list { color:var(--warn); font-size:.72rem; margin:.55rem 0 0; padding-left:1rem; }
+    .book { display:grid; grid-template-columns:1fr 1fr; gap:.7rem; }
+    .book-side h4 { margin:0 0 .35rem; font-size:.72rem; color:var(--mut); text-transform:uppercase; letter-spacing:.06em; }
+    .book-row { position:relative; display:grid; grid-template-columns:1fr 1fr; gap:.4rem; padding:.23rem .35rem; font-size:.72rem; font-variant-numeric:tabular-nums; overflow:hidden; }
+    .book-row i { position:absolute; inset:0 auto 0 0; opacity:.08; z-index:0; }
+    .book-row.ask i { background:var(--sell); }
+    .book-row.bid i { background:var(--buy); }
+    .book-row span { z-index:1; }
+    .book-row span:last-child { text-align:right; color:var(--mut); }
+    .alert-grid { display:grid; grid-template-columns:1fr 1fr auto; gap:.5rem; align-items:end; }
+    .security-strip { display:flex; flex-wrap:wrap; gap:.45rem; padding-top:.65rem; margin-top:.7rem; border-top:1px solid var(--line); }
+    .toast-stack { position:fixed; right:1rem; bottom:1rem; z-index:30; display:grid; gap:.45rem; max-width:min(360px,calc(100vw - 2rem)); }
+    .toast { border:1px solid var(--line); background:var(--glass); backdrop-filter:blur(14px); box-shadow:var(--shadow); border-radius:11px; padding:.7rem .8rem; font-size:.78rem; animation:toastIn .2s ease-out; }
+    .toast.ok { border-color:color-mix(in srgb,var(--ok) 40%,var(--line)); }
+    .toast.err { border-color:color-mix(in srgb,var(--err) 40%,var(--line)); }
+    @keyframes toastIn { from { opacity:0; transform:translateY(8px) } }
     .live-dot {
       display: inline-block; width: 7px; height: 7px; border-radius: 50%;
       background: var(--mut); margin-right: .35rem; vertical-align: middle;
     }
     .live-dot.on { background: var(--ok); box-shadow: 0 0 8px var(--ok); animation: pulse 1.4s infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.45} }
+    .core-line {
+      display:flex; align-items:center; justify-content:space-between; gap:.6rem; flex-wrap:wrap;
+      margin:-.2rem 0 .8rem; padding:.58rem .75rem; border:1px solid var(--line); border-radius:12px;
+      background:linear-gradient(90deg,rgba(184,108,255,.14),rgba(255,255,255,.025));
+      color:var(--acc2); font:650 .7rem/1.3 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.035em;
+    }
+    .sync-bar { color:var(--acc); text-shadow:0 0 10px rgba(184,108,255,.55); }
+    .flow-rail { display:grid; grid-template-columns:repeat(7,1fr); gap:.4rem; margin-bottom:.85rem; }
+    .flow-node {
+      min-width:0; padding:.48rem .45rem; border:1px solid var(--line); border-radius:10px;
+      background:rgba(184,108,255,.045); color:var(--mut); font-size:.62rem; line-height:1.25;
+      text-align:center; text-transform:uppercase; letter-spacing:.045em;
+    }
+    .flow-node.on { color:var(--fg); border-color:color-mix(in srgb,var(--acc) 50%,var(--line)); box-shadow:inset 0 0 18px rgba(184,108,255,.08); }
+    .market-strip { display:flex; gap:.45rem; overflow:auto; padding:.15rem 0 .15rem; scrollbar-width:thin; }
+    .market-chip {
+      flex:0 0 auto; min-width:112px; padding:.48rem .58rem; border:1px solid var(--line); border-radius:11px;
+      background:rgba(255,255,255,.025); cursor:pointer; color:var(--fg); text-align:left;
+    }
+    .market-chip:hover { border-color:var(--acc); box-shadow:var(--glow); }
+    .market-chip b,.market-chip span { display:block; }
+    .market-chip b { font-size:.75rem; }
+    .market-chip span { margin-top:.12rem; font-size:.68rem; color:var(--mut); font-variant-numeric:tabular-nums; }
+    .tool-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:.45rem; margin-top:.65rem; }
+    .tool-cell { border:1px solid var(--line); border-radius:10px; padding:.5rem; background:rgba(184,108,255,.045); }
+    .tool-cell span { display:block; color:var(--mut); font-size:.62rem; text-transform:uppercase; letter-spacing:.055em; }
+    .tool-cell b { display:block; margin-top:.18rem; font-size:.78rem; font-variant-numeric:tabular-nums; }
+    .volume-oracle {
+      display:grid; grid-template-columns:1.3fr repeat(3,1fr); gap:.45rem; margin-top:.65rem; padding:.6rem;
+      border:1px solid color-mix(in srgb,var(--acc) 45%,var(--line)); border-radius:11px;
+      background:linear-gradient(110deg,rgba(184,108,255,.13),rgba(255,255,255,.025));
+    }
+    .volume-oracle div span { display:block; color:var(--mut); font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; }
+    .volume-oracle div b { display:block; margin-top:.16rem; font-size:.76rem; }
+    .discovery-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:.55rem; }
+    .token-card { border:1px solid var(--line); border-radius:12px; padding:.62rem; background:rgba(184,108,255,.045); min-width:0; }
+    .token-card:hover { border-color:color-mix(in srgb,var(--acc) 55%,var(--line)); }
+    .token-head { display:flex; align-items:flex-start; justify-content:space-between; gap:.5rem; }
+    .token-symbol { font-weight:800; color:var(--fg); }
+    .token-name { margin-top:.08rem; color:var(--mut); font-size:.66rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .token-stats { display:grid; grid-template-columns:1fr 1fr; gap:.25rem .45rem; margin:.5rem 0; font-size:.68rem; }
+    .token-stats span { color:var(--mut); }
+    .risk-tags { display:flex; gap:.25rem; flex-wrap:wrap; min-height:1.35rem; }
+    .risk-tag { padding:.12rem .32rem; border-radius:999px; border:1px solid color-mix(in srgb,var(--err) 42%,var(--line)); color:var(--err); font-size:.57rem; }
+    .wallet-shell { display:grid; gap:.6rem; }
+    .wallet-address { font: .68rem/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; word-break:break-all; color:var(--acc2); }
+    .wallet-token-list { max-height:150px; overflow:auto; display:grid; gap:.25rem; }
+    .wallet-token { display:flex; justify-content:space-between; gap:.6rem; padding:.28rem .4rem; border-bottom:1px solid var(--line); font-size:.66rem; }
+    .connection-hero {
+      position:relative; overflow:hidden; display:grid; grid-template-columns:1.35fr .85fr; gap:1rem;
+      background:radial-gradient(500px 220px at 90% 0%,rgba(240,221,255,.17),transparent 70%),linear-gradient(130deg,rgba(184,108,255,.16),rgba(255,255,255,.025));
+    }
+    .connection-hero::after { content:""; position:absolute; width:260px; height:260px; right:-110px; bottom:-170px; border:1px solid rgba(240,221,255,.22); border-radius:50%; box-shadow:0 0 60px rgba(184,108,255,.13); }
+    .connection-hero h2 { margin:.05rem 0 .35rem; font-size:1.25rem; letter-spacing:-.025em; }
+    .connection-meter { height:7px; overflow:hidden; border-radius:999px; background:rgba(255,255,255,.07); margin:.75rem 0 .42rem; }
+    .connection-meter i { display:block; width:0; height:100%; border-radius:inherit; background:linear-gradient(90deg,var(--acc),#fff); box-shadow:0 0 16px rgba(184,108,255,.5); transition:width .35s ease; }
+    .connection-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:.45rem; align-content:start; position:relative; z-index:1; }
+    .connection-summary div { padding:.65rem; border:1px solid var(--line); border-radius:11px; background:rgba(8,5,13,.28); }
+    .connection-summary span { display:block; color:var(--mut); font-size:.61rem; text-transform:uppercase; letter-spacing:.055em; }
+    .connection-summary b { display:block; margin-top:.22rem; font-size:1rem; }
+    .connection-toolbar { display:flex; gap:.5rem; align-items:center; justify-content:space-between; flex-wrap:wrap; margin:.85rem 0 .65rem; }
+    .connection-toolbar select { width:auto; min-width:175px; padding:.45rem .65rem; font-size:.76rem; }
+    .connection-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:.65rem; }
+    .connection-card { display:flex; flex-direction:column; min-width:0; padding:.75rem; border:1px solid var(--line); border-radius:13px; background:linear-gradient(145deg,rgba(184,108,255,.065),rgba(255,255,255,.018)); transition:transform .16s ease,border-color .16s ease; }
+    .connection-card:hover { transform:translateY(-2px); border-color:color-mix(in srgb,var(--acc) 52%,var(--line)); }
+    .connection-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:.55rem; }
+    .connection-name { display:flex; align-items:center; gap:.48rem; min-width:0; }
+    .connection-glyph { flex:0 0 auto; width:29px; height:29px; display:grid; place-items:center; border-radius:9px; background:linear-gradient(145deg,#fff,#b86cff); color:#21052e; font-weight:900; box-shadow:0 6px 18px rgba(184,108,255,.22); }
+    .connection-name b { display:block; font-size:.82rem; line-height:1.2; }
+    .connection-name small { display:block; color:var(--mut); font-size:.61rem; margin-top:.12rem; }
+    .connection-state { flex:0 0 auto; padding:.16rem .38rem; border:1px solid var(--line); border-radius:999px; color:var(--mut); font-size:.57rem; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; }
+    .connection-state.status-connected,.connection-state.status-active,.connection-state.status-ready,.connection-state.status-available,.connection-state.status-dry_run_ready { color:var(--ok); border-color:color-mix(in srgb,var(--ok) 40%,var(--line)); }
+    .connection-state.status-review_only,.connection-state.status-detected { color:var(--acc2); border-color:color-mix(in srgb,var(--acc) 45%,var(--line)); }
+    .connection-state.status-degraded,.connection-state.status-client_required { color:var(--warn); border-color:color-mix(in srgb,var(--warn) 40%,var(--line)); }
+    .connection-state.status-offline,.connection-state.status-locked { color:var(--err); border-color:color-mix(in srgb,var(--err) 40%,var(--line)); }
+    .connection-purpose { margin:.58rem 0 .48rem; min-height:2.4em; color:var(--fg); font-size:.72rem; line-height:1.35; }
+    .connection-detail { margin:0 0 .5rem; color:var(--mut); font-size:.64rem; line-height:1.35; }
+    .connection-chips { display:flex; flex-wrap:wrap; gap:.24rem; margin-bottom:.58rem; }
+    .connection-chips span { padding:.11rem .3rem; border-radius:999px; background:rgba(184,108,255,.09); color:var(--mut); font-size:.56rem; }
+    .connection-privacy { margin-top:auto; padding-top:.5rem; border-top:1px solid rgba(110,72,143,.38); color:var(--mut); font-size:.6rem; line-height:1.35; }
+    .connection-card button { width:100%; margin-top:.55rem; }
+    .path-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:.55rem; }
+    .path-step { position:relative; padding:.7rem; border:1px solid var(--line); border-radius:12px; background:rgba(184,108,255,.04); }
+    .path-step strong { display:block; font-size:.72rem; }
+    .path-step p { margin:.25rem 0 0; color:var(--mut); font-size:.64rem; line-height:1.35; }
+    .path-number { display:inline-grid; place-items:center; width:21px; height:21px; margin-bottom:.42rem; border-radius:7px; background:var(--acc); color:#16031f; font-size:.65rem; font-weight:900; }
+    dialog {
+      width:min(560px,calc(100vw - 1.5rem)); color:var(--fg); border:1px solid var(--line); border-radius:18px;
+      background:linear-gradient(145deg,var(--card2),var(--card)); box-shadow:0 30px 100px rgba(0,0,0,.65),var(--glow); padding:0;
+    }
+    dialog::backdrop { background:rgba(4,0,8,.78); backdrop-filter:blur(8px); }
+    .trade-head { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; padding:1rem; border-bottom:1px solid var(--line); }
+    .trade-body { padding:1rem; }
+    .trade-route { display:grid; grid-template-columns:1fr auto 1fr; gap:.5rem; align-items:end; }
+    .trade-arrow { padding:0 0 .7rem; color:var(--acc); font-size:1.15rem; }
+    .contract { font:.65rem/1.35 ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--mut); word-break:break-all; }
+    .trade-warning { margin:.7rem 0; padding:.6rem; border:1px solid color-mix(in srgb,var(--warn) 35%,var(--line)); border-radius:10px; color:var(--mut); font-size:.7rem; line-height:1.4; background:rgba(255,200,87,.055); }
+    @media (max-width: 760px) {
+      main { padding:.9rem .75rem 5rem; }
+      header { align-items:center; }
+      .header-actions .badge { display:none; }
+      .kpi-grid { grid-template-columns:1fr 1fr; }
+      .tabs { position:fixed; z-index:20; bottom:.6rem; left:.6rem; right:.6rem; margin:0; padding:.42rem; justify-content:space-around; background:var(--glass); border:1px solid var(--line); border-radius:14px; backdrop-filter:blur(16px); box-shadow:var(--shadow); }
+      .tab { flex:1; padding:.55rem .35rem; }
+      .split-3,.result-grid { grid-template-columns:1fr 1fr; }
+      .book { grid-template-columns:1fr; }
+      .alert-grid { grid-template-columns:1fr 1fr; }
+      .alert-grid button { grid-column:1/-1; }
+      .flow-rail { grid-template-columns:repeat(4,1fr); }
+      .discovery-grid { grid-template-columns:1fr 1fr; }
+      .volume-oracle { grid-template-columns:1fr 1fr; }
+      .connection-grid { grid-template-columns:1fr 1fr; }
+      .connection-hero,.path-grid { grid-template-columns:1fr; }
+    }
+    @media (max-width: 440px) {
+      .brand-mark { display:none; }
+      .kpi-grid { gap:.5rem; }
+      .kpi { padding:.65rem; }
+      .split-2,.split-3,.result-grid,.discovery-grid,.tool-grid,.connection-grid { grid-template-columns:1fr; }
+      .flow-rail { grid-template-columns:1fr 1fr; }
+      .trade-route { grid-template-columns:1fr; }
+      .trade-arrow { padding:0; transform:rotate(90deg); text-align:center; }
+    }
+    @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation:none!important; scroll-behavior:auto!important; } }
   </style>
 </head>
 <body>
 <main>
   <header>
-    <div>
-      <h1>Sniper Trades · Live Deck</h1>
-      <p class="sub">Live AI jspace · chart moves · free 1m feeds · finance news</p>
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">🜂</div>
+      <div>
+        <p class="eyebrow">Crypto movement intelligence</p>
+        <h1>RavenTrade Core</h1>
+        <p class="sub">Live tool telemetry · new-token radar · human-signed execution</p>
+      </div>
     </div>
-    <span class="badge" id="ver">v5.1</span>
+    <div class="header-actions">
+      <button class="ghost" id="themeToggle" type="button" aria-label="Toggle color theme">Light mode</button>
+      <button class="primary" id="tradeNowHeader" type="button">Trade now</button>
+      <span class="badge" title="No transaction can leave without a wallet or typed confirmation">Defense locked</span>
+      <span class="badge" id="ver">v6.2</span>
+    </div>
   </header>
 
+  <div class="core-line" aria-label="Raven system status">
+    <span>🜂 RAVEN•TRADE•CORE v1.0 🜂</span>
+    <span class="sync-bar">J-SPACE SYNC: ████████ 100%</span>
+    <span>TIME: <span id="ravenTime">—</span></span>
+  </div>
+
+  <div class="flow-rail" aria-label="Raven analysis flow">
+    <div class="flow-node on">Raven eye<br/>open</div>
+    <div class="flow-node on">Market<br/>horizon</div>
+    <div class="flow-node">Shadow<br/>intel</div>
+    <div class="flow-node">Tool<br/>talons</div>
+    <div class="flow-node">Decision<br/>forge</div>
+    <div class="flow-node">Wallet<br/>nest</div>
+    <div class="flow-node">Next flight<br/>path</div>
+  </div>
+
   <nav class="tabs" role="tablist">
-    <button class="tab active" data-tab="deck" type="button">Live Deck</button>
-    <button class="tab" data-tab="research" type="button">Research</button>
-    <button class="tab" data-tab="copy" type="button">Copy Trade</button>
+    <button class="tab active" id="tab-deck" data-tab="deck" type="button" role="tab" aria-controls="panel-deck" aria-selected="true" tabindex="0">Flight deck</button>
+    <button class="tab" id="tab-research" data-tab="research" type="button" role="tab" aria-controls="panel-research" aria-selected="false" tabindex="-1">Deep scan</button>
+    <button class="tab" id="tab-copy" data-tab="copy" type="button" role="tab" aria-controls="panel-copy" aria-selected="false" tabindex="-1">Paper / Exchange</button>
+    <button class="tab" id="tab-connections" data-tab="connections" type="button" role="tab" aria-controls="panel-connections" aria-selected="false" tabindex="-1">Connections</button>
   </nav>
 
+  <section class="kpi-grid" aria-label="Trading overview">
+    <div class="kpi"><div class="kpi-label">Market horizon <span class="live-dot" id="kpiMarketDot"></span></div><div class="kpi-value" id="kpiMarket">BTC —</div><div class="kpi-note" id="kpiMarketNote">Awaiting feed</div></div>
+    <div class="kpi"><div class="kpi-label">Decision forge</div><div class="kpi-value" id="kpiVerdict">Hold</div><div class="kpi-note" id="kpiConviction">No analysis yet</div></div>
+    <div class="kpi"><div class="kpi-label">Paper portfolio</div><div class="kpi-value" id="kpiCash">$0.00</div><div class="kpi-note" id="kpiPositions">0 open positions</div></div>
+    <div class="kpi"><div class="kpi-label">Wallet nest</div><div class="kpi-value" id="kpiExecution">Disconnected</div><div class="kpi-note" id="kpiWalletNote">No balance inferred</div></div>
+  </section>
+
   <!-- ═══ LIVE DECK ═══ -->
-  <div class="panel active" id="panel-deck">
+  <div class="panel active" id="panel-deck" role="tabpanel" aria-labelledby="tab-deck">
     <section class="card" style="margin-bottom:.85rem">
       <div class="row" style="align-items:flex-end">
         <div style="flex:1;min-width:110px">
@@ -219,18 +431,25 @@
           </select>
         </div>
         <div style="flex:1.2;min-width:140px">
-          <label for="deckQ">Query bias</label>
-          <input id="deckQ" value="live sniper" spellcheck="false"/>
+          <label for="deckQ">Crypto-only AI focus</label>
+          <input id="deckQ" value="defense-first movement and volume scan" spellcheck="false"/>
         </div>
         <button class="primary" id="deckGo" type="button" style="width:auto;min-width:120px">Start live</button>
         <button class="ghost" id="deckStop" type="button">Stop</button>
         <button class="ghost" id="newsRefresh" type="button">Refresh news</button>
       </div>
       <div class="meta">
-        <span class="pill" id="deckStatus"><span class="live-dot" id="liveDot"></span>idle</span>
+        <span class="pill" id="deckStatus"><span class="live-dot"></span>idle</span>
         <span class="pill" id="deckSrc">feed —</span>
         <span class="pill" id="deckTick">tick —</span>
         <span class="pill" id="newsStatus">news —</span>
+      </div>
+      <div style="margin-top:.7rem;padding-top:.65rem;border-top:1px solid var(--line)">
+        <div class="row" style="justify-content:space-between;margin-bottom:.4rem">
+          <p class="eyebrow" style="margin:0">All-market radar · liquid watchlist</p>
+          <button class="ghost" id="radarRefresh" type="button">Refresh</button>
+        </div>
+        <div class="market-strip" id="marketRadar"><span class="hint">Scanning liquid crypto pairs…</span></div>
       </div>
     </section>
 
@@ -238,8 +457,8 @@
       <!-- Chart column -->
       <section class="card">
         <div class="row" style="justify-content:space-between;margin-bottom:.5rem">
-          <h3 style="margin:0">Live chart</h3>
-          <span class="pill" id="chartTfPill">1m</span>
+          <h3 style="margin:0">Market Horizon Scan</h3>
+          <div class="row"><button class="ghost" id="openTv" type="button" title="Open this market in TradingView">TradingView ↗</button><span class="pill" id="chartTfPill">1m</span></div>
         </div>
         <div class="ticker-bar">
           <div>
@@ -255,31 +474,49 @@
           <div class="chart-empty" id="chartEmpty">Start live deck for chart moves</div>
           <canvas id="chart" width="800" height="300"></canvas>
         </div>
+        <div class="volume-oracle" id="volumeOracle">
+          <div><span>Predictive volume</span><b>Awaiting live candles</b></div>
+          <div><span>Projected</span><b>—</b></div>
+          <div><span>Pressure</span><b>—</b></div>
+          <div><span>Confidence</span><b>—</b></div>
+        </div>
       </section>
 
       <!-- AI jspace column -->
       <section class="card">
-        <div class="row" style="justify-content:space-between">
-          <h3 style="margin:0">AI jspace stream</h3>
-          <span class="pill" id="verdictPill">verdict —</span>
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Cognitive Core Status — Raven Eye Open</p>
+            <h3>Evidence, bias &amp; counter-case</h3>
+          </div>
+          <div class="row">
+            <button class="ghost" id="shareSetup" type="button" title="Share the current trade idea">Share</button>
+            <span class="pill" id="verdictPill">verdict —</span>
+          </div>
         </div>
         <div class="verdict-banner" id="verdictBanner">
           <strong id="verdictText">—</strong>
           <span class="pill" id="convPill">conviction —</span>
         </div>
         <p id="summaryOut" style="margin:0 0 .65rem;color:var(--acc);font-size:.88rem;line-height:1.4">Waiting for live stream…</p>
-        <h3 style="font-size:.82rem;color:var(--mut)">1 · Live internal thoughts</h3>
-        <pre id="jspaceOut" style="max-height:200px">// jspace updates appear here as price moves</pre>
+        <h3 style="font-size:.82rem;color:var(--mut)">Live J-Space decision audit</h3>
+        <pre id="jspaceOut" style="max-height:200px">// concise decision rationale appears here as price moves</pre>
         <div class="jspace-log" id="jspaceLog"></div>
+        <div class="tool-grid" id="toolGrid">
+          <div class="tool-cell"><span>Timeframes</span><b>—</b></div>
+          <div class="tool-cell"><span>RSI</span><b>—</b></div>
+          <div class="tool-cell"><span>ATR</span><b>—</b></div>
+        </div>
+        <p class="hint" style="margin:.55rem 0 0">Shows observable inputs and concise rationale—not private chain-of-thought. Local indicators are TradingView-style equivalents, not native Pine execution.</p>
       </section>
     </div>
 
     <div class="grid deck-bottom" style="margin-top:.85rem">
       <section class="card">
-        <h3>2 · Active TradingView analysis</h3>
+        <h3>Tool Talons Deployed · Live Indicator Readings</h3>
         <pre id="tvOut" style="max-height:300px">// tool readings + confluences stream here</pre>
         <div class="plan" style="margin-top:.75rem">
-          <h3 style="font-size:.82rem;color:var(--mut)">3 · Strategy position</h3>
+          <h3 style="font-size:.82rem;color:var(--mut)">Decision Forge · Strategy position</h3>
           <dl id="plan">
             <dt>Waiting</dt>
             <dd>Start live deck for entry / SL / TP / next action.</dd>
@@ -290,7 +527,7 @@
       <!-- Finance news -->
       <section class="card">
         <div class="row" style="justify-content:space-between;margin-bottom:.45rem">
-          <h3 style="margin:0">Live finance news</h3>
+          <h3 style="margin:0">Shadow Network Intel · Crypto News</h3>
           <select id="newsCat" style="width:auto;padding:.35rem .55rem;font-size:.78rem">
             <option value="">All</option>
             <option value="crypto">Crypto</option>
@@ -298,16 +535,161 @@
             <option value="macro">Macro</option>
           </select>
         </div>
-        <p class="hint" style="margin:0 0 .55rem">Free RSS: CoinDesk · Cointelegraph · Yahoo · Fed · BBC · CNBC</p>
+        <p class="hint" style="margin:0 0 .55rem">Crypto movement and listing context, with macro sources included only when they change crypto risk.</p>
         <div class="news-list" id="newsList">
           <div class="hint">Loading headlines…</div>
         </div>
       </section>
     </div>
+
+    <div class="grid deck-bottom" style="margin-top:.85rem">
+      <section class="card">
+        <div class="section-head">
+          <div><p class="eyebrow">Capital protection</p><h3>Defense-first risk calculator</h3></div>
+          <span class="pill">No order placed</span>
+        </div>
+        <p class="hint">Size by maximum loss at stop. A live analysis will prefill entry, stop, and target.</p>
+        <div class="split-3">
+          <div class="field"><label for="riskEquity">Account equity (USD)</label><input id="riskEquity" type="number" min="1" value="10000"/></div>
+          <div class="field"><label for="riskPct">Risk per trade (%) · hard max 2</label><input id="riskPct" type="number" min="0.01" max="2" step="0.1" value="1"/></div>
+          <div class="field"><label for="riskCap">Max notional (optional)</label><input id="riskCap" type="number" min="1" placeholder="No cap"/></div>
+          <div class="field"><label for="riskEntry">Entry</label><input id="riskEntry" type="number" min="0" step="any" placeholder="67000"/></div>
+          <div class="field"><label for="riskStop">Stop loss</label><input id="riskStop" type="number" min="0" step="any" placeholder="66000"/></div>
+          <div class="field"><label for="riskTarget">Target (optional)</label><input id="riskTarget" type="number" min="0" step="any" placeholder="69000"/></div>
+        </div>
+        <button class="primary" id="riskGo" type="button" style="width:100%">Calculate safe size</button>
+        <div class="result-box" id="riskResult" hidden></div>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <div><p class="eyebrow">Next Flight Path</p><h3>Order book &amp; smart alert</h3></div>
+          <button class="ghost" id="bookRefresh" type="button">Refresh</button>
+        </div>
+        <div class="book" id="orderBook"><p class="hint">Loading depth…</p></div>
+        <div style="margin-top:.8rem;padding-top:.75rem;border-top:1px solid var(--line)">
+          <div class="alert-grid">
+            <div><label for="alertDirection">Notify when price</label><select id="alertDirection"><option value="above">crosses above</option><option value="below">crosses below</option></select></div>
+            <div><label for="alertTarget">Target price</label><input id="alertTarget" type="number" min="0" step="any" placeholder="Price"/></div>
+            <button class="sm" id="alertArm" type="button">Arm alert</button>
+          </div>
+          <div class="row" style="margin-top:.5rem;justify-content:space-between">
+            <label class="chk"><input id="alertVoice" type="checkbox"/> Voice notification</label>
+            <span class="pill" id="alertStatus">local alert idle</span>
+          </div>
+        </div>
+        <div class="security-strip">
+          <span class="pill ok">Paper default</span><span class="pill ok">No withdrawal path</span>
+          <span class="pill ok">Wallet-signed DEX</span><span class="pill">2FA/auth: not configured</span>
+        </div>
+      </section>
+    </div>
+
+    <div class="grid deck-bottom" style="margin-top:.85rem">
+      <section class="card">
+        <div class="section-head">
+          <div><p class="eyebrow">New wings entering the market</p><h3>Solana Meme-Coin &amp; New-Listing Radar</h3></div>
+          <button class="ghost" id="discoveryRefresh" type="button">Refresh</button>
+        </div>
+        <p class="hint">Newest DEX token profiles with active pairs. Every token is unvetted; profile appearance is not an endorsement, audit, or rug-pull check.</p>
+        <div class="row" style="margin-bottom:.6rem">
+          <input id="dexSearch" placeholder="Search symbol, token name, or contract" style="flex:1;min-width:180px"/>
+          <button class="sm" id="dexSearchGo" type="button">Search DEX</button>
+        </div>
+        <div class="discovery-grid" id="discoveryGrid"><p class="hint">Scanning new Solana profiles…</p></div>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <div><p class="eyebrow">Wallet Nest Status</p><h3>Phantom · Read-only Portfolio</h3></div>
+          <span class="pill" id="walletStatus">disconnected</span>
+        </div>
+        <div class="wallet-shell">
+          <p class="hint" style="margin:0">Connection exposes only your public address for balance display. Raven never requests, receives, or stores a seed phrase or private key.</p>
+          <div class="row">
+            <button class="primary" id="phantomConnect" type="button">Connect Phantom</button>
+            <button class="ghost" id="phantomDisconnect" type="button" hidden>Disconnect</button>
+          </div>
+          <div class="wallet-address" id="walletAddress">No public address connected.</div>
+          <div class="result-box" id="walletBalance"><span class="hint">Balances remain unknown until you approve a connection.</span></div>
+          <div class="wallet-token-list" id="walletTokens"></div>
+          <div class="security-strip">
+            <span class="pill ok">Self-custody</span><span class="pill ok">Public address only</span>
+            <span class="pill ok">Human signature required</span><span class="pill">No background execution</span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ═══ CONNECTIONS ═══ -->
+  <div class="panel" id="panel-connections" role="tabpanel" aria-labelledby="tab-connections">
+    <section class="card connection-hero">
+      <div style="position:relative;z-index:1">
+        <p class="eyebrow">Tool Talons · One Control Nest</p>
+        <h2>Connections Center</h2>
+        <p class="sub">See what Raven can actually use, what needs your approval, and what remains safely locked. Public data tools connect automatically; wallets and live execution never do.</p>
+        <div class="connection-meter" aria-label="Connection readiness"><i id="connectionsMeter"></i></div>
+        <div class="row" style="justify-content:space-between">
+          <span class="hint" id="connectionsLastCheck" style="margin:0">Loading connection catalog…</span>
+          <button class="sm" id="connectionsRefresh" type="button">Run health check</button>
+        </div>
+      </div>
+      <div class="connection-summary" aria-label="Connection summary">
+        <div><span>Ready</span><b id="connectionsReady">—</b></div>
+        <div><span>Attention</span><b id="connectionsAttention">—</b></div>
+        <div><span>Wallet</span><b id="connectionsWallet">Off</b></div>
+      </div>
+    </section>
+
+    <section class="card" style="margin-top:.85rem">
+      <div class="section-head">
+        <div><p class="eyebrow">Recommended flight path</p><h3>From market signal to human-approved action</h3></div>
+        <span class="pill ok">Defense first</span>
+      </div>
+      <div class="path-grid">
+        <div class="path-step"><span class="path-number">1</span><strong>Watch</strong><p>Public exchange feeds, order books, crypto news, and new-token discovery.</p></div>
+        <div class="path-step"><span class="path-number">2</span><strong>Verify</strong><p>Raven cross-checks timeframes, projected volume, invalidation, and counter-signals.</p></div>
+        <div class="path-step"><span class="path-number">3</span><strong>Size</strong><p>The deterministic risk engine limits loss at the stop to 2% or less.</p></div>
+        <div class="path-step"><span class="path-number">4</span><strong>Approve</strong><p>You review the route and sign in Phantom—or stay in paper mode.</p></div>
+      </div>
+    </section>
+
+    <div class="connection-toolbar">
+      <div><p class="eyebrow" style="margin:0">Actual app runtime</p><span class="hint" style="margin:0">Development connectors are intentionally excluded.</span></div>
+      <select id="connectionCategory" aria-label="Filter connections by category">
+        <option value="">All connections</option>
+        <option value="Market data">Market data</option>
+        <option value="Intelligence">Intelligence</option>
+        <option value="Discovery">Discovery</option>
+        <option value="Analysis">Analysis</option>
+        <option value="Wallet data">Wallet data</option>
+        <option value="Safety">Safety</option>
+        <option value="Execution">Execution</option>
+      </select>
+    </div>
+    <section class="connection-grid" id="connectionGrid" aria-live="polite">
+      <div class="card"><p class="hint">Organizing Raven's tools and connections…</p></div>
+    </section>
+
+    <div class="grid two" style="margin-top:.85rem">
+      <section class="card">
+        <p class="eyebrow">What Raven can see</p>
+        <h3>Observable data only</h3>
+        <p class="hint">Public prices, candles, order-book depth, public news, public token data, and a public wallet address only after you approve Phantom. Balances are never guessed.</p>
+        <div class="security-strip"><span class="pill ok">No seed phrases</span><span class="pill ok">No private keys</span><span class="pill ok">No hidden wallet sync</span></div>
+      </section>
+      <section class="card">
+        <p class="eyebrow">What Raven cannot do silently</p>
+        <h3>Execution stays under your control</h3>
+        <p class="hint">Trade Now is a review ticket, not an order. Jupiter swaps need a separate wallet signature, and exchange orders remain dry-run unless every live gate is explicitly satisfied.</p>
+        <div class="security-strip"><span class="pill ok">Paper default</span><span class="pill ok">Typed confirmation</span><span class="pill ok">No withdrawal path</span></div>
+      </section>
+    </div>
   </div>
 
   <!-- ═══ RESEARCH ═══ -->
-  <div class="panel" id="panel-research">
+  <div class="panel" id="panel-research" role="tabpanel" aria-labelledby="tab-research">
     <div class="grid two">
       <section class="card">
         <div class="field">
@@ -342,8 +724,8 @@
   </div>
 
   <!-- ═══ COPY TRADE ═══ -->
-  <div class="panel" id="panel-copy">
-    <p class="hint">Leaders emit signals; followers mirror. Paper by default. Live = dry-run unless confirm live.</p>
+  <div class="panel" id="panel-copy" role="tabpanel" aria-labelledby="tab-copy">
+    <div class="disclosure" style="margin-bottom:.85rem"><strong>Execution safety:</strong> followers use a local paper ledger by default. Live followers stay in dry-run unless the final signal includes both the live toggle and the exact typed phrase <code>CONFIRM LIVE</code>. There is no withdrawal path.</div>
     <div class="grid copy">
       <section class="card">
         <h3>Register leader</h3>
@@ -372,7 +754,8 @@
         <div style="flex:1;min-width:110px"><label for="sigLead">Leader ID</label><input id="sigLead"/></div>
         <div style="width:120px"><label for="sigInst">Instrument</label><input id="sigInst" value="BTC_USDT"/></div>
         <div style="width:90px"><label for="sigNotional">Notional $</label><input id="sigNotional" type="number" value="25"/></div>
-        <label class="chk"><input type="checkbox" id="sigLive"/> Confirm live</label>
+        <label class="chk"><input type="checkbox" id="sigLive"/> Real submission</label>
+        <div style="flex:1;min-width:150px"><label for="sigConfirm">Live confirmation phrase</label><input id="sigConfirm" placeholder="CONFIRM LIVE" autocomplete="off"/></div>
         <button class="sm buy" id="sigBuy" type="button">BUY</button>
         <button class="sm sell" id="sigSell" type="button">SELL</button>
       </div>
@@ -396,6 +779,28 @@
     </div>
   </div>
 </main>
+<dialog id="tradeDialog" aria-labelledby="tradeTitle">
+  <div class="trade-head">
+    <div><p class="eyebrow">Guarded DEX handoff</p><h3 id="tradeTitle" style="margin:0">Trade Now · Phantom + Jupiter</h3></div>
+    <button class="ghost" id="tradeClose" type="button" aria-label="Close trade ticket">Close</button>
+  </div>
+  <div class="trade-body">
+    <div class="trade-route">
+      <div class="field"><label for="tradeFrom">Pay with</label><select id="tradeFrom"><option value="SOL">SOL</option><option value="USDC">USDC</option><option value="USDT">USDT</option></select></div>
+      <div class="trade-arrow" aria-hidden="true">→</div>
+      <div class="field"><label for="tradeTo">Receive token</label><input id="tradeTo" value="USDC" maxlength="44" spellcheck="false"/></div>
+    </div>
+    <div class="field"><label for="tradeAmount">Amount to route</label><input id="tradeAmount" type="number" min="0" step="any" placeholder="0.00"/></div>
+    <div class="contract" id="tradeContract">Standard pair. Select a new token from the radar to load its public mint address.</div>
+    <div class="trade-warning"><strong>⚠️ Raven Caw:</strong> Meme coins can lose 100%, freeze transfers, manipulate liquidity, or route through malicious contracts. Verify the mint, liquidity, price impact, slippage, and wallet simulation inside Jupiter. This app does not create or submit the swap.</div>
+    <label class="chk" style="align-items:flex-start"><input id="tradeAcknowledge" type="checkbox"/> I understand this opens Jupiter for final quote review and a separate Phantom signature. No trade has happened yet.</label>
+    <div class="row" style="margin-top:.8rem">
+      <button class="primary" id="openJupiter" type="button" disabled style="flex:1">Review on Jupiter ↗</button>
+      <button class="ghost" id="tradeRisk" type="button">Open risk calculator</button>
+    </div>
+  </div>
+</dialog>
+<div class="toast-stack" id="toastStack" aria-live="polite"></div>
 <script>
 const $ = (id) => document.getElementById(id);
 function esc(s) {
@@ -405,23 +810,231 @@ function fmt(n, d = 2) {
   if (n == null || Number.isNaN(n)) return '—';
   return Number(n).toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: 0 });
 }
+function compactUsd(n) {
+  if (n == null || Number.isNaN(Number(n))) return '—';
+  return '$' + Number(n).toLocaleString(undefined, { notation:'compact', maximumFractionDigits:1 });
+}
+function toast(message, kind = '') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + kind;
+  el.textContent = message;
+  $('toastStack').appendChild(el);
+  setTimeout(() => el.remove(), 4200);
+}
+function setTheme(theme) {
+  document.body.dataset.theme = theme;
+  localStorage.setItem('sniper-theme', theme);
+  $('themeToggle').textContent = theme === 'light' ? 'Dark mode' : 'Light mode';
+}
+setTheme(localStorage.getItem('sniper-theme') || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'));
+$('themeToggle').addEventListener('click', () => setTheme(document.body.dataset.theme === 'light' ? 'dark' : 'light'));
+function updateRavenTime() {
+  $('ravenTime').textContent = new Date().toLocaleString(undefined, { hour12:false, timeZoneName:'short' });
+}
+updateRavenTime();
+setInterval(updateRavenTime, 1000);
 function setDeckStatus(ok, text) {
   const el = $('deckStatus');
-  el.innerHTML = `<span class="live-dot ${ok === true ? 'on' : ''}" id="liveDot"></span>${esc(text)}`;
+  el.innerHTML = `<span class="live-dot ${ok === true ? 'on' : ''}"></span>${esc(text)}`;
   el.className = 'pill ' + (ok === true ? 'live' : ok === false ? 'err' : '');
 }
+
+/* guarded trade ticket */
+const tradeDialog = $('tradeDialog');
+let selectedTradeMint = '';
+function openTradeTicket({ symbol = 'USDC', address = '' } = {}) {
+  selectedTradeMint = address;
+  $('tradeTo').value = address || symbol;
+  $('tradeContract').textContent = address
+    ? `Selected public mint: ${address}. Verify this exact address again inside Jupiter and Phantom.`
+    : 'Standard pair. Select a new token from the radar to load its public mint address.';
+  $('tradeAcknowledge').checked = false;
+  $('openJupiter').disabled = true;
+  if (typeof tradeDialog.showModal === 'function') tradeDialog.showModal();
+  else tradeDialog.setAttribute('open', '');
+}
+$('tradeNowHeader').addEventListener('click', () => openTradeTicket());
+$('tradeClose').addEventListener('click', () => tradeDialog.close());
+$('tradeAcknowledge').addEventListener('change', () => {
+  $('openJupiter').disabled = !$('tradeAcknowledge').checked;
+});
+$('tradeTo').addEventListener('input', () => {
+  selectedTradeMint = $('tradeTo').value.trim();
+  $('tradeContract').textContent = selectedTradeMint.length > 20
+    ? `Entered public mint: ${selectedTradeMint}. Verify it independently before signing.`
+    : 'Symbol route selected. Jupiter will resolve available tokens for final review.';
+});
+$('openJupiter').addEventListener('click', () => {
+  if (!$('tradeAcknowledge').checked) return;
+  const from = $('tradeFrom').value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  const rawTo = ($('tradeTo').value.trim() || 'USDC');
+  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(rawTo) && !/^[A-Za-z0-9]{2,12}$/.test(rawTo)) {
+    return toast('Enter a valid token symbol or Solana mint address.', 'err');
+  }
+  const target = encodeURIComponent(rawTo);
+  const url = `https://jup.ag/swap/${encodeURIComponent(from)}-${target}`;
+  window.open(url, '_blank', 'noopener,noreferrer');
+  toast('Jupiter opened for quote review. No transaction was submitted.', 'ok');
+});
+$('tradeRisk').addEventListener('click', () => {
+  tradeDialog.close();
+  document.querySelector('.tab[data-tab="deck"]')?.click();
+  $('riskEquity').scrollIntoView({ behavior:'smooth', block:'center' });
+});
 
 /* tabs */
 document.querySelectorAll('.tab').forEach((btn) => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach((b) => b.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach((b) => { b.classList.remove('active'); b.setAttribute('aria-selected','false'); b.tabIndex = -1; });
     document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
     btn.classList.add('active');
+    btn.setAttribute('aria-selected','true');
+    btn.tabIndex = 0;
     $('panel-' + btn.dataset.tab).classList.add('active');
+    localStorage.setItem('sniper-tab', btn.dataset.tab);
     if (btn.dataset.tab === 'copy') refreshCopyState();
     if (btn.dataset.tab === 'deck' && !deckEs) loadNewsOnce();
+    if (btn.dataset.tab === 'connections') loadConnections(true);
+  });
+  btn.addEventListener('keydown', (event) => {
+    if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+    const tabs = [...document.querySelectorAll('.tab')];
+    const current = tabs.indexOf(btn);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+      : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    event.preventDefault();
+    tabs[next].focus();
+    tabs[next].click();
   });
 });
+
+/* ── connections center ───────────────────────────────────────────────── */
+let connectionsPayload = null;
+const connectionStatusLabel = {
+  ready:'Configured', active:'Active', available:'Available', connected:'Online',
+  degraded:'Partial', offline:'Unavailable', client_required:'Needs wallet',
+  detected:'Detected', review_only:'Review only', dry_run_ready:'Dry-run ready', locked:'Locked',
+};
+const connectionGlyph = {
+  'Market data':'↗', Intelligence:'◈', Discovery:'◎', Analysis:'⌁',
+  'Wallet data':'◇', Safety:'◆', Execution:'→',
+};
+function clientAwareConnections(payload) {
+  const clone = { ...payload, items:(payload.items || []).map((item) => ({ ...item })) };
+  const phantom = clone.items.find((item) => item.id === 'phantom');
+  const injected = window.phantom?.solana || (window.solana?.isPhantom ? window.solana : null);
+  if (phantom && connectedWalletAddress) {
+    phantom.status = 'connected';
+    phantom.detail = `Approved public address ${connectedWalletAddress.slice(0,4)}…${connectedWalletAddress.slice(-4)} · no auto-trading`;
+    phantom.action_label = 'View wallet';
+  } else if (phantom && injected?.isPhantom) {
+    phantom.status = 'detected';
+    phantom.detail = 'Phantom is installed. Connection still requires your approval.';
+  }
+  return clone;
+}
+function renderConnections(payload) {
+  const data = clientAwareConnections(payload);
+  const category = $('connectionCategory').value;
+  const items = (data.items || []).filter((item) => !category || item.category === category);
+  const readyStates = new Set(['ready','active','available','connected','detected','review_only','dry_run_ready']);
+  const allItems = data.items || [];
+  const ready = allItems.filter((item) => readyStates.has(item.status)).length;
+  const attention = allItems.filter((item) => item.status === 'degraded' || item.status === 'offline').length;
+  $('connectionsReady').textContent = `${ready}/${allItems.length}`;
+  $('connectionsAttention').textContent = String(attention);
+  $('connectionsAttention').className = attention ? 'side-sell' : 'side-buy';
+  $('connectionsWallet').textContent = connectedWalletAddress ? 'Connected' : (window.phantom?.solana || window.solana?.isPhantom) ? 'Detected' : 'Off';
+  $('connectionsMeter').style.width = `${allItems.length ? Math.round(ready / allItems.length * 100) : 0}%`;
+  $('connectionsLastCheck').textContent = data.probe_ran
+    ? `Health checked ${new Date(data.ts).toLocaleTimeString()} · wallet status is verified in this browser`
+    : 'Catalog loaded · run health check for live provider status';
+  $('connectionGrid').innerHTML = items.length ? items.map((item) => {
+    const capabilities = (item.capabilities || []).slice(0,5);
+    const providers = (item.providers || []).join(' → ');
+    const latency = item.latency_ms == null ? '' : ` · ${fmt(item.latency_ms,0)} ms`;
+    return `<article class="connection-card" data-connection-category="${esc(item.category)}">
+      <div class="connection-card-head">
+        <div class="connection-name"><span class="connection-glyph" aria-hidden="true">${esc(connectionGlyph[item.category] || '◆')}</span><div><b>${esc(item.name)}</b><small>${esc(item.category)} · ${esc(item.mode)}</small></div></div>
+        <span class="connection-state status-${esc(item.status)}">${esc(connectionStatusLabel[item.status] || item.status)}</span>
+      </div>
+      <p class="connection-purpose">${esc(item.purpose)}</p>
+      <p class="connection-detail"><strong>${esc(providers)}</strong><br/>${esc(item.detail || item.setup)}${esc(latency)}</p>
+      <div class="connection-chips">${capabilities.map((capability) => `<span>${esc(capability)}</span>`).join('')}</div>
+      <div class="connection-privacy">Privacy: ${esc(item.data_shared)}</div>
+      <button class="ghost" type="button" data-connection-action="${esc(item.action)}">${esc(item.action_label)}</button>
+    </article>`;
+  }).join('') : '<div class="card"><p class="hint">No connections match this category.</p></div>';
+  $('connectionGrid').querySelectorAll('[data-connection-action]').forEach((button) => {
+    button.addEventListener('click', () => handleConnectionAction(button.dataset.connectionAction));
+  });
+}
+function openPanel(name) {
+  document.querySelector(`.tab[data-tab="${name}"]`)?.click();
+}
+function handleConnectionAction(action) {
+  if (action === 'focus_market') { openPanel('deck'); window.scrollTo({ top:0, behavior:'smooth' }); }
+  else if (action === 'focus_news') { openPanel('deck'); $('newsList').scrollIntoView({ behavior:'smooth', block:'center' }); }
+  else if (action === 'focus_discovery') { openPanel('deck'); $('discoveryGrid').scrollIntoView({ behavior:'smooth', block:'center' }); }
+  else if (action === 'focus_risk') { openPanel('deck'); $('riskEquity').scrollIntoView({ behavior:'smooth', block:'center' }); }
+  else if (action === 'connect_phantom') {
+    if (connectedWalletAddress) { openPanel('deck'); $('walletAddress').scrollIntoView({ behavior:'smooth', block:'center' }); }
+    else connectPhantom();
+  }
+  else if (action === 'trade_now') openTradeTicket();
+  else if (action === 'open_tradingview') $('openTv').click();
+  else if (action === 'open_paper') openPanel('copy');
+}
+async function loadConnections(probe = false) {
+  const button = $('connectionsRefresh');
+  if (probe) { button.disabled = true; button.textContent = 'Checking…'; }
+  try {
+    const res = await fetch(`/integrations?probe=${probe ? 'true' : 'false'}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Connection registry unavailable');
+    connectionsPayload = data;
+    renderConnections(data);
+  } catch (e) {
+    $('connectionGrid').innerHTML = `<div class="card"><p class="hint">${esc(e.message || e)}</p></div>`;
+    $('connectionsLastCheck').textContent = 'Connection health could not be loaded.';
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Run health check';
+  }
+}
+$('connectionsRefresh').addEventListener('click', () => loadConnections(true));
+$('connectionCategory').addEventListener('change', () => connectionsPayload && renderConnections(connectionsPayload));
+
+/* ── crypto market radar ──────────────────────────────────────────────── */
+const radarSymbols = 'BTC_USDT,ETH_USDT,SOL_USDT,DOGE_USDT,XRP_USDT,ADA_USDT,AVAX_USDT,LINK_USDT';
+async function loadMarketRadar() {
+  const rail = $('marketRadar');
+  try {
+    const res = await fetch(`/market/radar?symbols=${encodeURIComponent(radarSymbols)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Radar unavailable');
+    const rows = (data.items || []).filter((row) => !row.error && row.last != null);
+    rail.innerHTML = rows.map((row) => {
+      const change = row.change == null ? null : Number(row.change) * 100;
+      const cls = change == null ? '' : change >= 0 ? 'side-buy' : 'side-sell';
+      const instrument = row.instrument || '';
+      return `<button class="market-chip" type="button" data-radar-symbol="${esc(instrument)}">
+        <b>${esc(instrument.replace('_USDT','').replace('_USD',''))}</b>
+        <span>${esc(fmt(row.last, Number(row.last) > 100 ? 2 : 6))} <i class="${cls}" style="font-style:normal">${change == null ? '' : (change >= 0 ? '+' : '') + change.toFixed(2) + '%'}</i></span>
+      </button>`;
+    }).join('') || '<span class="hint">No radar markets available.</span>';
+    rail.querySelectorAll('[data-radar-symbol]').forEach((button) => {
+      button.addEventListener('click', () => {
+        $('deckSym').value = button.dataset.radarSymbol;
+        startDeck();
+        toast(`Raven focused on ${button.dataset.radarSymbol}.`, 'ok');
+      });
+    });
+  } catch (e) {
+    rail.innerHTML = `<span class="hint">${esc(e.message || e)}</span>`;
+  }
+}
+$('radarRefresh').addEventListener('click', loadMarketRadar);
 
 /* ── chart ─────────────────────────────────────────────────────────────── */
 let candlesCache = [];
@@ -440,6 +1053,10 @@ function applyTicker(t) {
   $('srcPx').textContent = t.source || '—';
   $('instLabel').textContent = t.instrument || $('deckSym').value;
   $('deckSrc').textContent = 'feed ' + (t.source || '—');
+  $('kpiMarket').textContent = (t.instrument || $('deckSym').value).split('_')[0] + ' ' + fmt(px, px > 100 ? 2 : 6);
+  $('kpiMarketNote').textContent = (t.source || 'public feed') + (t.change != null ? ' · ' + (Number(t.change) * 100).toFixed(2) + '% 24h' : '');
+  $('kpiMarketDot').className = 'live-dot on';
+  checkPriceAlert(px);
   if (candlesCache.length && px != null) {
     const last = candlesCache[candlesCache.length - 1];
     last.c = px;
@@ -482,7 +1099,7 @@ function drawChart(candles) {
   }
   const range = hi - lo; hi += range * 0.04; lo -= range * 0.04;
   const n = candles.length, slot = plotW / n, bodyW = Math.max(1, Math.min(9, slot * 0.65));
-  ctx.strokeStyle = '#1c2636'; ctx.lineWidth = 1; ctx.fillStyle = '#5a6a82';
+  ctx.strokeStyle = '#3d2857'; ctx.lineWidth = 1; ctx.fillStyle = '#b8a9c9';
   ctx.font = '11px ui-sans-serif, system-ui, sans-serif';
   for (let i = 0; i <= 4; i++) {
     const y = pad.t + (plotH * i) / 4;
@@ -496,8 +1113,8 @@ function drawChart(candles) {
     if (c.o == null || c.c == null) continue;
     const x = pad.l + slot * i + slot / 2;
     const up = c.c >= c.o;
-    ctx.strokeStyle = up ? '#3dd68c' : '#ff6b7a';
-    ctx.fillStyle = up ? '#3dd68c' : '#ff6b7a';
+    ctx.strokeStyle = up ? '#dcbcff' : '#ff78a8';
+    ctx.fillStyle = up ? '#dcbcff' : '#ff78a8';
     ctx.beginPath(); ctx.moveTo(x, yOf(c.h)); ctx.lineTo(x, yOf(c.l)); ctx.stroke();
     const y1 = yOf(c.o), y2 = yOf(c.c);
     ctx.fillRect(x - bodyW / 2, Math.min(y1, y2), bodyW, Math.max(1, Math.abs(y2 - y1)));
@@ -505,7 +1122,7 @@ function drawChart(candles) {
   const last = candles[n - 1];
   if (last && last.c != null) {
     const y = yOf(last.c);
-    ctx.strokeStyle = 'rgba(61,214,198,.55)'; ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = 'rgba(184,108,255,.72)'; ctx.setLineDash([4, 4]);
     ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
     ctx.setLineDash([]);
   }
@@ -514,6 +1131,7 @@ window.addEventListener('resize', () => { if (candlesCache.length) drawChart(can
 
 /* ── jspace / sniper UI ────────────────────────────────────────────────── */
 const jspaceLog = [];
+let currentShareText = '';
 function pushLog(verdict, summary) {
   const t = new Date().toLocaleTimeString();
   jspaceLog.unshift({ t, verdict, summary });
@@ -541,6 +1159,24 @@ function renderPosition(sp, decision, plan) {
   `;
 }
 
+function renderLiveTools(analyses, preferredTf) {
+  const rows = Object.entries(analyses || {});
+  if (!rows.length) return;
+  const [tf, primary] = rows.find(([name]) => name === preferredTf) || rows[0];
+  const forecast = primary.volume_forecast || {};
+  $('toolGrid').innerHTML = `
+    <div class="tool-cell"><span>MTF alignment</span><b>${esc(rows.map(([name, a]) => `${name}:${a.bias_label || '—'}`).join(' · '))}</b></div>
+    <div class="tool-cell"><span>${esc(tf)} RSI</span><b>${esc(fmt(primary.rsi,1))}</b></div>
+    <div class="tool-cell"><span>${esc(tf)} ATR</span><b>${esc(fmt(primary.atr,4))}</b></div>`;
+  const pressureClass = String(forecast.bias || '').includes('bullish') ? 'side-buy'
+    : String(forecast.bias || '').includes('bearish') ? 'side-sell' : '';
+  $('volumeOracle').innerHTML = `
+    <div><span>Predictive volume</span><b class="${pressureClass}">${esc(forecast.bias || 'unavailable')}</b></div>
+    <div><span>Projected</span><b>${forecast.projected_ratio == null ? '—' : esc(fmt(forecast.projected_ratio,2)) + '× baseline'}</b></div>
+    <div><span>Pressure</span><b>${forecast.pressure_score == null ? '—' : esc(fmt(forecast.pressure_score,1)) + '/100'}</b></div>
+    <div><span>Confidence</span><b>${forecast.confidence == null ? '—' : esc(forecast.confidence) + '%'}</b></div>`;
+}
+
 function applySniper(data) {
   if (data.ticker) applyTicker(data.ticker);
   if (data.candles && data.candles.length) setCandles(data.candles, (data.data_sources || [])[0]);
@@ -552,15 +1188,34 @@ function applySniper(data) {
   $('convPill').textContent = 'conviction ' + (v.conviction != null ? v.conviction + '%' : '—') +
     (v.conviction_label ? ' · ' + v.conviction_label : '');
   $('summaryOut').textContent = data.summary || v.one_liner || '—';
+  $('kpiVerdict').textContent = dir;
+  $('kpiVerdict').className = 'kpi-value ' + (String(dir).toLowerCase() === 'long' ? 'side-buy' : (String(dir).toLowerCase() === 'short' || String(dir).toLowerCase() === 'exit') ? 'side-sell' : '');
+  $('kpiConviction').textContent = (v.conviction != null ? v.conviction + '% conviction' : 'Unrated') + ' · informational';
   const banner = $('verdictBanner');
   banner.className = 'verdict-banner ' + String(dir).toLowerCase();
   $('verdictPill').textContent = 'verdict ' + dir;
   $('verdictPill').className = 'pill ' + (String(dir).toLowerCase() === 'long' ? 'ok'
     : (String(dir).toLowerCase() === 'short' || String(dir).toLowerCase() === 'exit') ? 'err' : 'live');
   renderPosition(data.strategy_position, data.trade_decision, data.plan);
+  renderLiveTools(data.mtf_analyses || data.analyses, data.timeframe || $('deckTf').value);
+  const setup = data.strategy_position || data.trade_decision || {};
+  if (setup.entry != null) $('riskEntry').value = setup.entry;
+  if (setup.stop_loss != null) $('riskStop').value = setup.stop_loss;
+  if (setup.take_profit_1 != null) $('riskTarget').value = setup.take_profit_1;
+  currentShareText = `${dir} ${data.instrument || $('deckSym').value} · ${v.conviction ?? '—'}% conviction\n${data.summary || ''}\nEntry ${setup.entry ?? '—'} · Stop ${setup.stop_loss ?? '—'} · TP1 ${setup.take_profit_1 ?? '—'}\nPaper-first research from Sniper Trades.`;
   pushLog(dir, data.summary || v.one_liner || '');
   $('deckTick').textContent = 'tick ' + new Date().toLocaleTimeString();
+  if (Date.now() - lastBookLoad > 15000) loadOrderBook();
 }
+$('shareSetup').addEventListener('click', async () => {
+  if (!currentShareText) return toast('Run a live analysis before sharing.', 'err');
+  try {
+    if (navigator.share) await navigator.share({ title: 'Sniper Trades setup', text: currentShareText });
+    else { await navigator.clipboard.writeText(currentShareText); toast('Trade idea copied.', 'ok'); }
+  } catch (e) {
+    if (e.name !== 'AbortError') toast('Could not share this setup.', 'err');
+  }
+});
 
 /* ── news ──────────────────────────────────────────────────────────────── */
 function renderNews(payload) {
@@ -623,6 +1278,7 @@ function startDeck() {
   const url = `/live/deck?symbol=${encodeURIComponent(sym)}&timeframe=${encodeURIComponent(tf)}&interval_ms=6000&query=${encodeURIComponent(q)}&news_every=2`;
   deckEs = new EventSource(url);
   $('deckGo').textContent = 'Live…';
+  loadOrderBook();
   deckEs.addEventListener('hello', () => setDeckStatus(true, 'live deck armed'));
   deckEs.addEventListener('ticker', (ev) => {
     try { applyTicker(JSON.parse(ev.data)); } catch (_) {}
@@ -655,6 +1311,190 @@ function startDeck() {
 
 $('deckGo').addEventListener('click', startDeck);
 $('deckStop').addEventListener('click', stopDeck);
+$('openTv').addEventListener('click', () => {
+  const pair = ($('deckSym').value.trim() || 'BTC_USDT').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  window.open(`https://www.tradingview.com/chart/?symbol=BINANCE%3A${encodeURIComponent(pair)}`, '_blank', 'noopener,noreferrer');
+});
+
+/* ── risk, depth, and local alerts ────────────────────────────────────── */
+let lastBookLoad = 0;
+async function loadOrderBook() {
+  lastBookLoad = Date.now();
+  const symbol = $('deckSym').value.trim() || 'BTC_USDT';
+  try {
+    const res = await fetch(`/market/book?symbol=${encodeURIComponent(symbol)}&depth=8`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Depth unavailable');
+    const bids = data.bids || [], asks = data.asks || [];
+    const maxQty = Math.max(1, ...bids.map((x) => Number(x.qty)), ...asks.map((x) => Number(x.qty)));
+    const side = (title, rows, cls) => `<div class="book-side"><h4>${title}</h4>${rows.map((x) => {
+      const width = Math.max(2, Number(x.qty) / maxQty * 100);
+      return `<div class="book-row ${cls}"><i style="width:${width}%"></i><span>${esc(fmt(x.price, Number(x.price) > 100 ? 2 : 6))}</span><span>${esc(fmt(x.qty, 6))}</span></div>`;
+    }).join('')}</div>`;
+    $('orderBook').innerHTML = side('Bids', bids, 'bid') + side('Asks', asks, 'ask');
+  } catch (e) {
+    $('orderBook').innerHTML = `<p class="hint">${esc(e.message || e)}</p>`;
+  }
+}
+$('bookRefresh').addEventListener('click', loadOrderBook);
+
+$('riskGo').addEventListener('click', async () => {
+  const btn = $('riskGo');
+  const payload = {
+    equity: Number($('riskEquity').value), risk_percent: Number($('riskPct').value),
+    entry: Number($('riskEntry').value), stop: Number($('riskStop').value),
+  };
+  if ($('riskTarget').value) payload.target = Number($('riskTarget').value);
+  if ($('riskCap').value) payload.max_notional = Number($('riskCap').value);
+  btn.disabled = true;
+  try {
+    const res = await fetch('/risk/calculate', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.detail || 'Could not calculate risk');
+    $('riskResult').hidden = false;
+    $('riskResult').innerHTML = `<div class="result-grid">
+      <div><span>Direction</span><b class="${d.side === 'long' ? 'side-buy' : 'side-sell'}">${esc(d.side.toUpperCase())}</b></div>
+      <div><span>Quantity</span><b>${esc(fmt(d.quantity,8))}</b></div>
+      <div><span>Notional</span><b>$${esc(fmt(d.notional,2))}</b></div>
+      <div><span>Loss at stop</span><b>$${esc(fmt(d.risk_amount,2))} · ${esc(fmt(d.risk_percent,2))}%</b></div>
+      <div><span>Risk / reward</span><b>${d.risk_reward == null ? '—' : '1 : ' + esc(fmt(d.risk_reward,2))}</b></div>
+      <div><span>Effective leverage</span><b>${esc(fmt(d.effective_leverage,3))}×</b></div>
+    </div>${d.warnings.length ? `<ul class="warning-list">${d.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}`;
+  } catch (e) {
+    toast(e.message || String(e), 'err');
+  } finally { btn.disabled = false; }
+});
+
+let armedAlert = null;
+function checkPriceAlert(price) {
+  if (!armedAlert || price == null) return;
+  const hit = armedAlert.direction === 'above' ? price >= armedAlert.target : price <= armedAlert.target;
+  if (!hit) return;
+  const message = `${$('deckSym').value || 'Market'} ${armedAlert.direction} ${fmt(armedAlert.target, 6)} · now ${fmt(price, 6)}`;
+  toast(message, 'ok');
+  if ('Notification' in window && Notification.permission === 'granted') new Notification('Sniper Trades alert', { body: message });
+  if ($('alertVoice').checked && 'speechSynthesis' in window) speechSynthesis.speak(new SpeechSynthesisUtterance(message));
+  armedAlert = null;
+  $('alertStatus').textContent = 'alert triggered';
+  $('alertStatus').className = 'pill ok';
+}
+$('alertArm').addEventListener('click', async () => {
+  const target = Number($('alertTarget').value);
+  if (!(target > 0)) return toast('Enter a valid alert price.', 'err');
+  if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission();
+  armedAlert = { target, direction:$('alertDirection').value };
+  $('alertStatus').textContent = `${armedAlert.direction} ${fmt(target,6)}`;
+  $('alertStatus').className = 'pill live';
+  toast('Local price alert armed.', 'ok');
+});
+
+/* ── new-token discovery and Phantom wallet nest ─────────────────────── */
+function renderDiscovery(items) {
+  const grid = $('discoveryGrid');
+  if (!items || !items.length) {
+    grid.innerHTML = '<p class="hint">No active matching pairs were returned.</p>';
+    return;
+  }
+  grid.innerHTML = items.map((token) => {
+    const move = token.change_24h;
+    const moveClass = move == null ? '' : Number(move) >= 0 ? 'side-buy' : 'side-sell';
+    const address = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(token.token_address || '') ? token.token_address : '';
+    const pair = /^[1-9A-HJ-NP-Za-km-z]{32,64}$/.test(token.pair_address || '') ? token.pair_address : '';
+    const researchUrl = pair ? `https://dexscreener.com/solana/${pair}` : 'https://dexscreener.com/solana';
+    return `<article class="token-card">
+      <div class="token-head"><div style="min-width:0"><div class="token-symbol">${esc(token.symbol || 'NEW')} / ${esc(token.quote_symbol || '—')}</div><div class="token-name">${esc(token.name || 'Unlabelled token')}</div></div><span class="pill">${token.age_hours == null ? 'new' : esc(fmt(token.age_hours,1)) + 'h'}</span></div>
+      <div class="token-stats">
+        <div><span>Price</span><br/>${token.price_usd == null ? '—' : '$' + esc(fmt(token.price_usd,10))}</div>
+        <div><span>24h</span><br/><b class="${moveClass}">${move == null ? '—' : (Number(move) >= 0 ? '+' : '') + esc(fmt(move,2)) + '%'}</b></div>
+        <div><span>Liquidity</span><br/>${esc(compactUsd(token.liquidity_usd))}</div>
+        <div><span>Volume</span><br/>${esc(compactUsd(token.volume_24h))}</div>
+      </div>
+      <div class="risk-tags">${(token.risk_flags || ['unvetted token']).map((flag) => `<span class="risk-tag">${esc(flag)}</span>`).join('')}</div>
+      <div class="row" style="margin-top:.55rem"><button class="sm" type="button" data-trade-mint="${esc(address)}" data-trade-symbol="${esc(token.symbol || 'TOKEN')}">Trade now</button><button class="ghost" type="button" data-research-url="${esc(researchUrl)}">Inspect ↗</button></div>
+    </article>`;
+  }).join('');
+  grid.querySelectorAll('[data-trade-mint]').forEach((button) => button.addEventListener('click', () => {
+    openTradeTicket({ symbol:button.dataset.tradeSymbol, address:button.dataset.tradeMint });
+  }));
+  grid.querySelectorAll('[data-research-url]').forEach((button) => button.addEventListener('click', () => {
+    window.open(button.dataset.researchUrl, '_blank', 'noopener,noreferrer');
+  }));
+}
+async function loadDiscovery(query = '') {
+  $('discoveryGrid').innerHTML = '<p class="hint">Raven is scanning DEX profiles and liquidity…</p>';
+  try {
+    const path = query
+      ? `/market/dex/search?q=${encodeURIComponent(query)}&limit=12`
+      : '/market/discovery?chain=solana&limit=12';
+    const res = await fetch(path);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Discovery unavailable');
+    renderDiscovery(data.items || []);
+  } catch (e) {
+    $('discoveryGrid').innerHTML = `<p class="hint">${esc(e.message || e)}</p>`;
+  }
+}
+$('discoveryRefresh').addEventListener('click', () => loadDiscovery());
+$('dexSearchGo').addEventListener('click', () => loadDiscovery($('dexSearch').value.trim()));
+$('dexSearch').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') loadDiscovery($('dexSearch').value.trim());
+});
+
+let phantomProvider = null;
+let connectedWalletAddress = '';
+async function loadWalletSnapshot(address) {
+  $('walletBalance').innerHTML = '<span class="hint">Reading the approved public address…</span>';
+  try {
+    const res = await fetch(`/wallet/solana/${encodeURIComponent(address)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Wallet snapshot unavailable');
+    $('walletBalance').innerHTML = `<div class="result-grid"><div><span>SOL balance</span><b>${esc(fmt(data.sol_balance,6))} SOL</b></div><div><span>SPL assets</span><b>${esc((data.tokens || []).length)}</b></div><div><span>Mode</span><b>Read only</b></div></div>`;
+    $('walletTokens').innerHTML = (data.tokens || []).slice(0,20).map((token) => `<div class="wallet-token"><span title="${esc(token.mint)}">${esc(String(token.mint || '').slice(0,6))}…${esc(String(token.mint || '').slice(-4))}</span><b>${esc(fmt(token.amount,8))}</b></div>`).join('') || '<span class="hint">No classic SPL token balances found.</span>';
+  } catch (e) {
+    $('walletBalance').innerHTML = `<span class="hint">Connected, but balances could not be read: ${esc(e.message || e)}</span>`;
+  }
+}
+async function connectPhantom() {
+  const provider = window.phantom?.solana || (window.solana?.isPhantom ? window.solana : null);
+  if (!provider?.isPhantom) {
+    toast('Phantom was not detected. Install it or open this app inside Phantom mobile.', 'err');
+    window.open('https://phantom.com/download', '_blank', 'noopener,noreferrer');
+    return;
+  }
+  try {
+    const response = await provider.connect();
+    const address = response.publicKey?.toString();
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address || '')) throw new Error('Phantom returned an invalid public address');
+    phantomProvider = provider;
+    connectedWalletAddress = address;
+    $('walletStatus').textContent = 'connected · read only';
+    $('walletStatus').className = 'pill ok';
+    $('walletAddress').textContent = address;
+    $('phantomConnect').textContent = 'Refresh Phantom';
+    $('phantomDisconnect').hidden = false;
+    $('kpiExecution').textContent = 'Connected';
+    $('kpiWalletNote').textContent = `${address.slice(0,4)}…${address.slice(-4)} · no auto-trading`;
+    await loadWalletSnapshot(address);
+    toast('Phantom connected read-only. No transaction permission was granted.', 'ok');
+    if (connectionsPayload) renderConnections(connectionsPayload);
+  } catch (e) {
+    if (String(e?.message || e).toLowerCase().includes('reject')) return toast('Phantom connection was cancelled.', 'err');
+    toast(e.message || String(e), 'err');
+  }
+}
+async function disconnectPhantom() {
+  try { await phantomProvider?.disconnect?.(); } catch (_) {}
+  phantomProvider = null; connectedWalletAddress = '';
+  $('walletStatus').textContent = 'disconnected'; $('walletStatus').className = 'pill';
+  $('walletAddress').textContent = 'No public address connected.';
+  $('walletBalance').innerHTML = '<span class="hint">Balances remain unknown until you approve a connection.</span>';
+  $('walletTokens').innerHTML = '';
+  $('phantomConnect').textContent = 'Connect Phantom'; $('phantomDisconnect').hidden = true;
+  $('kpiExecution').textContent = 'Disconnected'; $('kpiWalletNote').textContent = 'No balance inferred';
+  if (connectionsPayload) renderConnections(connectionsPayload);
+}
+$('phantomConnect').addEventListener('click', connectPhantom);
+$('phantomDisconnect').addEventListener('click', disconnectPhantom);
 
 /* ── research (single shot) ────────────────────────────────────────────── */
 function setStatus(ok, text) {
@@ -715,6 +1555,15 @@ async function refreshCopyState() {
     const st = await (await fetch('/copy/state')).json();
     renderRoster(st);
     renderFills(st.fills || []);
+    const balances = Object.values(st.paper_balances || {}).map(Number);
+    const cash = balances.reduce((a,b) => a + b, 0);
+    const openPositions = Object.values(st.paper_positions || {}).reduce((n, p) => n + Object.values(p || {}).filter((q) => Number(q) !== 0).length, 0);
+    $('kpiCash').textContent = '$' + fmt(cash, 2);
+    $('kpiPositions').textContent = `${openPositions} open position${openPositions === 1 ? '' : 's'} · ${(st.fills || []).length} fills`;
+    const liveFollowers = (st.followers || []).filter((f) => f.mode === 'live').length;
+    if (!connectedWalletAddress) {
+      $('kpiWalletNote').textContent = liveFollowers ? `${liveFollowers} exchange follower(s) · dry-run` : 'No balance inferred';
+    }
     if (st.leaders && st.leaders.length) {
       if (!$('follLead').value) $('follLead').value = st.leaders[0].leader_id;
       if (!$('sigLead').value) $('sigLead').value = st.leaders[0].leader_id;
@@ -766,9 +1615,10 @@ $('btnLeader').addEventListener('click', async () => {
     body: JSON.stringify({ name: $('leadName').value.trim() || 'Leader', symbols }),
   });
   const data = await res.json();
-  if (!res.ok) return alert(data.detail || 'failed');
+  if (!res.ok) return toast(data.detail || 'Could not add leader.', 'err');
   $('follLead').value = data.leader_id;
   $('sigLead').value = data.leader_id;
+  toast('Leader registered.', 'ok');
   refreshCopyState();
 });
 $('btnFollower').addEventListener('click', async () => {
@@ -784,7 +1634,8 @@ $('btnFollower').addEventListener('click', async () => {
     }),
   });
   const data = await res.json();
-  if (!res.ok) return alert(data.detail || 'failed');
+  if (!res.ok) return toast(data.detail || 'Could not add follower.', 'err');
+  toast(`${mode === 'paper' ? 'Paper' : 'Dry-run live'} follower registered.`, 'ok');
   refreshCopyState();
 });
 async function emitSide(side) {
@@ -796,10 +1647,12 @@ async function emitSide(side) {
       side, order_type: 'MARKET',
       notional_usd: Number($('sigNotional').value) || 25,
       auto_copy: true, confirm_live: $('sigLive').checked,
+      confirmation_text: $('sigConfirm').value.trim(),
     }),
   });
   const data = await res.json();
-  if (!res.ok) return alert(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
+  if (!res.ok) return toast(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail), 'err');
+  toast(`${side} signal emitted · ${(data.fills || []).length} follower result(s).`, 'ok');
   refreshCopyState();
 }
 $('sigBuy').addEventListener('click', () => emitSide('BUY'));
@@ -810,9 +1663,27 @@ $('refreshCopy').addEventListener('click', refreshCopyState);
 fetch('/health').then((r) => r.json()).then((d) => {
   if (d.version) $('ver').textContent = 'v' + d.version;
 }).catch(() => {});
+async function primeDashboard() {
+  const symbol = $('deckSym').value.trim() || 'BTC_USDT';
+  const tf = $('deckTf').value;
+  try {
+    const [tickerRes, candleRes] = await Promise.all([
+      fetch(`/market/ticker?symbol=${encodeURIComponent(symbol)}`),
+      fetch(`/market/candles?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(tf)}&count=120`),
+    ]);
+    if (tickerRes.ok) applyTicker(await tickerRes.json());
+    if (candleRes.ok) { const d = await candleRes.json(); setCandles(d.candles, d.source); }
+  } catch (_) { $('kpiMarketNote').textContent = 'Feed unavailable · retry with Start live'; }
+}
 loadNewsOnce();
-// Auto-start live deck for the immersive experience
-setTimeout(startDeck, 400);
+loadOrderBook();
+loadMarketRadar();
+loadDiscovery();
+loadConnections(false);
+refreshCopyState();
+primeDashboard();
+const savedTab = localStorage.getItem('sniper-tab');
+if (savedTab && savedTab !== 'deck') document.querySelector(`.tab[data-tab="${savedTab}"]`)?.click();
 </script>
 </body>
 </html>

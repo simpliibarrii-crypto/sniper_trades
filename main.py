@@ -30,14 +30,17 @@ from schemas import (
     ReadyOut,
     ResearchQuery,
     ResearchResponse,
+    RiskCalculationIn,
+    RiskCalculationOut,
     SessionListOut,
     SignalCreate,
     TickerOut,
 )
 from agents.raven_trader import LIVE_SNIPER_TRADER_PROMPT, TRADER_SYSTEM_PROMPT, raven_analyze
-from services import finance_news, free_market, pipeline
+from services import dex_intel, finance_news, free_market, integrations, pipeline, solana_wallet
 from services.copy_trade import get_engine
 from services.raven_market_pack import build_market_pack
+from services.risk import calculate_position_size
 from services.trade_intel import parse_trade_intent
 
 _UI = Path(__file__).resolve().parent / "ui" / "index.html"
@@ -63,7 +66,7 @@ app.add_middleware(GZipMiddleware, minimum_size=400)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_settings.cors_origin_list,
-    allow_credentials=True,
+    allow_credentials=_settings.cors_origin_list != ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -78,6 +81,14 @@ async def timing_header(request: Request, call_next):
         "x-request-id", uuid.uuid4().hex[:12]
     )
     response.headers["X-App-Version"] = _settings.version
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "camera=(), geolocation=(), microphone=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "script-src 'self' 'unsafe-inline'; connect-src 'self'; "
+        "img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    )
     return response
 
 
@@ -98,12 +109,24 @@ async def trader_prompt():
         "version": _settings.version,
         "prompt": LIVE_SNIPER_TRADER_PROMPT or TRADER_SYSTEM_PROMPT,
         "format": [
-            "1. jspace (Live Internal Thoughts)",
-            "2. Active TradingView Analysis",
-            "3. Current Strategy Position",
-            "4. Live Sniper Verdict",
+            "1. Cognitive Core Status (evidence, bias, counter-case)",
+            "2. Market Horizon Scan",
+            "3. Shadow Network Intel",
+            "4. Tool Talons Deployed (live indicator readings)",
+            "5. Decision Forge (position, invalidation, worst case)",
+            "6. Wallet Nest Status",
+            "7. Next Flight Path (Live Sniper Verdict)",
         ],
     }
+
+
+@app.post("/risk/calculate", response_model=RiskCalculationOut)
+async def risk_calculate(payload: RiskCalculationIn):
+    """Calculate loss-at-stop position size; never places an order."""
+    try:
+        return calculate_position_size(**payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/news")
@@ -121,6 +144,12 @@ async def news_list(
 @app.get("/news/sources")
 async def news_sources():
     return finance_news.list_news_sources()
+
+
+@app.get("/integrations")
+async def integration_list(probe: bool = Query(False)):
+    """One safe, UI-ready registry for all actual app tools and connections."""
+    return await asyncio.to_thread(integrations.integration_snapshot, probe)
 
 
 @app.get("/sniper/live")
@@ -354,6 +383,74 @@ async def market_ticker(symbol: str = Query("BTC_USDT", max_length=32)):
     return data
 
 
+@app.get("/market/radar")
+async def market_radar(
+    symbols: str = Query(
+        "BTC_USDT,ETH_USDT,SOL_USDT,DOGE_USDT,XRP_USDT,ADA_USDT",
+        max_length=240,
+    ),
+):
+    """Parallel crypto-only watchlist snapshot; individual failures stay isolated."""
+    requested = [
+        free_market.normalize_instrument(item)
+        for item in symbols.split(",")
+        if item.strip()
+    ][:12]
+    requested = list(dict.fromkeys(requested))
+
+    async def fetch_one(instrument: str):
+        try:
+            return await asyncio.to_thread(free_market.get_ticker, instrument)
+        except Exception as exc:  # noqa: BLE001
+            return {"instrument": instrument, "error": str(exc)[:180]}
+
+    rows = await asyncio.gather(*(fetch_one(item) for item in requested))
+    return {
+        "scope": "configured liquid-market watchlist; use DEX discovery for new tokens",
+        "items": rows,
+        "ts": int(time.time() * 1000),
+    }
+
+
+@app.get("/market/discovery")
+async def market_discovery(
+    chain: str = Query("solana", max_length=24),
+    limit: int = Query(12, ge=1, le=24),
+):
+    """Newest active DEX profiles. Discovery only: tokens are not safety-vetted."""
+    if chain.lower() != "solana":
+        raise HTTPException(status_code=400, detail="only solana discovery is enabled")
+    try:
+        return await asyncio.to_thread(dex_intel.latest_solana_tokens, limit)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/market/dex/search")
+async def market_dex_search(
+    q: str = Query(..., min_length=1, max_length=80),
+    limit: int = Query(12, ge=1, le=24),
+):
+    """Search DEX pairs by symbol, name, or public token address."""
+    try:
+        return await asyncio.to_thread(dex_intel.search_pairs, q, limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/wallet/solana/{address}")
+async def wallet_solana(address: str):
+    """Read a user-approved public address. No keys, signing, or persistence."""
+    try:
+        return await asyncio.to_thread(solana_wallet.wallet_snapshot, address)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 @app.get("/market/candles", response_model=CandlesOut)
 async def market_candles(
     symbol: str = Query("BTC_USDT", max_length=32),
@@ -455,6 +552,11 @@ async def copy_register_follower(payload: FollowerCreate):
 
 @app.post("/copy/signals")
 async def copy_emit_signal(payload: SignalCreate):
+    if payload.confirm_live and payload.confirmation_text != "CONFIRM LIVE":
+        raise HTTPException(
+            status_code=400,
+            detail="Type CONFIRM LIVE to authorize real order submission",
+        )
     try:
         result = await asyncio.to_thread(
             get_engine().emit_signal,
@@ -477,6 +579,11 @@ async def copy_emit_signal(payload: SignalCreate):
 @app.post("/copy/signals/{signal_id}/copy")
 async def copy_signal(signal_id: str, payload: Optional[CopySignalIn] = None):
     confirm = payload.confirm_live if payload else False
+    if confirm and (not payload or payload.confirmation_text != "CONFIRM LIVE"):
+        raise HTTPException(
+            status_code=400,
+            detail="Type CONFIRM LIVE to authorize real order submission",
+        )
     try:
         fills = await asyncio.to_thread(
             get_engine().copy_signal, signal_id, confirm

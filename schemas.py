@@ -144,7 +144,48 @@ class SignalCreate(BaseModel):
         default=False,
         description="If true, live followers submit real orders (default dry-run)",
     )
+    confirmation_text: str = Field(
+        default="",
+        max_length=32,
+        description="Must equal CONFIRM LIVE when confirm_live is true",
+    )
 
 
 class CopySignalIn(BaseModel):
     confirm_live: bool = False
+    confirmation_text: str = Field(default="", max_length=32)
+
+
+# ── Risk management ───────────────────────────────────────────────────────
+
+
+class RiskCalculationIn(BaseModel):
+    equity: float = Field(..., gt=0, le=1_000_000_000)
+    risk_percent: float = Field(
+        default=1.0,
+        gt=0,
+        le=2.0,
+        description="Hard defense ceiling: maximum portfolio loss at stop is 2%",
+    )
+    entry: float = Field(..., gt=0)
+    stop: float = Field(..., gt=0)
+    target: Optional[float] = Field(default=None, gt=0)
+    max_notional: Optional[float] = Field(default=None, gt=0)
+
+
+class RiskCalculationOut(BaseModel):
+    side: str
+    equity: float
+    risk_percent: float
+    risk_amount: float
+    entry: float
+    stop: float
+    target: Optional[float] = None
+    quantity: float
+    notional: float
+    position_percent: float
+    effective_leverage: float
+    reward_amount: Optional[float] = None
+    risk_reward: Optional[float] = None
+    capped: bool = False
+    warnings: List[str] = Field(default_factory=list)

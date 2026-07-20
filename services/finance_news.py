@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 import time
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from email.utils import parsedate_to_datetime
 from html import unescape
 from typing import Any, Dict, List, Optional, Tuple
@@ -138,9 +139,9 @@ def _parse_rss_or_atom(xml_bytes: bytes, source: str, category: str) -> List[Dic
     return items
 
 
-def _fetch_feed(source: str, category: str, url: str, timeout: float = 10.0) -> List[Dict[str, Any]]:
+def _fetch_feed(source: str, category: str, url: str, timeout: float = 6.0) -> List[Dict[str, Any]]:
     headers = {
-        "User-Agent": "SniperTrades-News/5.1 (local; free RSS)",
+        "User-Agent": "SniperTrades-News/6.2 (local; free RSS)",
         "Accept": "application/rss+xml, application/xml, text/xml, */*",
     }
     with httpx.Client(timeout=timeout, headers=headers, follow_redirects=True) as client:
@@ -165,11 +166,19 @@ def get_news(
     else:
         items = []
         errors: List[str] = []
-        for source, cat, url in _FEEDS:
-            try:
-                items.extend(_fetch_feed(source, cat, url))
-            except Exception as exc:  # noqa: BLE001
-                errors.append(f"{source}: {exc}")
+        # RSS feeds are independent; parallel fetch keeps the dashboard bounded by
+        # the slowest feed instead of the sum of every provider timeout.
+        with ThreadPoolExecutor(max_workers=len(_FEEDS)) as pool:
+            futures = {
+                pool.submit(_fetch_feed, source, cat, url): source
+                for source, cat, url in _FEEDS
+            }
+            for future in as_completed(futures):
+                source = futures[future]
+                try:
+                    items.extend(future.result())
+                except Exception as exc:  # noqa: BLE001
+                    errors.append(f"{source}: {exc}")
         # de-dupe by title
         seen = set()
         uniq: List[Dict[str, Any]] = []

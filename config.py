@@ -15,8 +15,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    app_name: str = "Sniper Trades · J-Space"
-    version: str = "5.1.0"
+    app_name: str = "RavenTrade Core · Sniper Trades"
+    version: str = "6.2.0"
     host: str = "127.0.0.1"
     port: int = 8000
     max_sessions: int = 48

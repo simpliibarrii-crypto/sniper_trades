@@ -2,17 +2,40 @@
 
 Local sovereign reasoning workspace powered by **Sniper Trades** live strategy: multi-TF free market data (1m+), explicit J-Space graph, TradingView-style tool stack, copy-trade, live chart, and provenance.
 
+## v6.2 Raven console
+
+- Unique purple-and-white cyber-noir dashboard with a responsive Raven analysis flow
+- Live order book, multi-timeframe tool telemetry, and projected volume-pressure logic
+- Liquid-coin watchlist plus new Solana token-profile and DEX-pair discovery
+- Injected Phantom connection for user-approved, read-only public-wallet balances
+- Guarded Trade Now ticket that hands swaps to Jupiter for quote review and wallet signature
+- Deterministic loss-at-stop risk calculator with a hard 2% defense ceiling
+- Paper-first copy trading; real submission requires the exact phrase `CONFIRM LIVE`
+- Security response headers and an honest auth status (2FA/biometric auth is not yet implemented)
+- J-Space exposes concise evidence, confirmation-bias checks, and counter-cases—not private chain-of-thought
+- A centralized Connections Center showing actual runtime providers, live health, setup steps, privacy scope, and the safest next action
+
+The app never requests private keys or seed phrases. DEX discovery is unvetted
+research data, and opening Jupiter does not mean a transaction was submitted.
+
 ### Live Sniper response format
 
-1. **jspace (Live Internal Thoughts)** — real-time reasoning, sniper opportunity, bias + counter  
-2. **Active TradingView Analysis** — every tool reading, levels, confluences, tool flips  
-3. **Current Strategy Position** — entry / SL / TP / size / next action  
-4. **Live Sniper Verdict** — Hold / Long / Short / Exit + conviction %  
+1. **Cognitive Core Status** — evidence, confirmation bias, counter-case
+2. **Market Horizon Scan** — price, volatility, and multi-timeframe structure
+3. **Shadow Network Intel** — crypto news, DEX discovery, and supported on-chain context
+4. **Tool Talons Deployed** — live indicator and projected volume-pressure readings
+5. **Decision Forge** — entry / SL / TP / size / invalidation / worst case
+6. **Wallet Nest Status** — connected public data or explicitly disconnected
+7. **Next Flight Path** — Hold / Long / Short / Exit + guarded next action
 
 System prompt: `GET /trader/prompt` → `LIVE_SNIPER_TRADER_PROMPT`  
 Live sniper: `GET /sniper/live?symbol=BTC_USDT&timeframe=1m`  
 **Live deck** (jspace + chart + news): `GET /live/deck?symbol=BTC_USDT&timeframe=1m`  
-News: `GET /news?limit=24` (free RSS — CoinDesk, Cointelegraph, Yahoo, Fed, BBC, CNBC)## Quick start
+News: `GET /news?limit=24` (free RSS — CoinDesk, Cointelegraph, Yahoo, Fed, BBC, CNBC)
+
+Connections: `GET /integrations?probe=true` (safe catalog + live provider health)
+
+## Quick start
 
 ```bash
 cd sniper_trades
@@ -27,9 +50,10 @@ Open **http://127.0.0.1:8000**
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/` | Console UI (Research · Live Chart · Copy Trade) |
+| GET | `/` | Console UI (Flight Deck · Deep Scan · Paper/Exchange · Connections) |
 | GET | `/health` | Liveness |
 | GET | `/ready` | Readiness + session count |
+| GET | `/integrations` | Runtime connection catalog; add `?probe=true` for live health |
 | POST | `/research/search` | Run J-Space research |
 | GET | `/sessions` | List warm sessions |
 | DELETE | `/sessions/{id}` | Drop a session |
@@ -38,6 +62,16 @@ Open **http://127.0.0.1:8000**
 | GET | `/market/candles` | OHLCV from **1m** up (`?timeframe=1m&count=180`) |
 | GET | `/market/book` | Order book depth |
 | GET | `/market/stream` | SSE live ticker feed |
+| GET | `/market/radar` | Parallel liquid-crypto watchlist snapshot |
+| GET | `/market/discovery` | Latest active Solana token profiles from DEX Screener |
+| GET | `/market/dex/search` | Search DEX pairs by token, symbol, or public address |
+| GET | `/wallet/solana/{address}` | Read-only SOL/SPL snapshot for an approved public address |
+| POST | `/risk/calculate` | Loss-at-stop position sizing; never places an order |
+| GET | `/copy/state` | Copy-trade ledger snapshot |
+| POST | `/copy/leaders` | Register a leader |
+| POST | `/copy/followers` | Register a follower (paper default) |
+| POST | `/copy/signals` | Emit signal + auto-copy to followers |
+| POST | `/copy/signals/{id}/copy` | Re-copy an existing signal |
 
 ### Free market data (no API key)
 
@@ -49,11 +83,17 @@ Open **http://127.0.0.1:8000**
 | Crypto.com public / cdcx | 1m | Last-resort fallback |
 
 RavenTrader multi-TF stack: `1m, 5m, 15m, 1h, 4h, 1D`.
-| GET | `/copy/state` | Copy-trade ledger snapshot |
-| POST | `/copy/leaders` | Register a leader |
-| POST | `/copy/followers` | Register a follower (paper default) |
-| POST | `/copy/signals` | Emit signal + auto-copy to followers |
-| POST | `/copy/signals/{id}/copy` | Re-copy an existing signal |
+
+### Connection organization
+
+| Layer | Runtime providers | Safety boundary |
+|---|---|---|
+| Market data | Binance → Kraken → Coinbase → Crypto.com public | Public requests; automatic fallback |
+| Intelligence | Crypto/market/macro RSS + DEX Screener | Read-only research; new tokens remain unvetted |
+| Analysis | Raven indicators, projected volume, risk engine | Local compute; forecasts are heuristic |
+| Wallet | Phantom + Solana RPC | Public address only after explicit approval |
+| DEX action | Jupiter handoff | Quote review and separate wallet signature required |
+| Exchange action | Paper ledger + optional cdcx | Paper default; dry-run and exact live confirmation gates |
 
 ```bash
 curl -s http://127.0.0.1:8000/research/search \
@@ -73,7 +113,7 @@ curl -s -X POST http://127.0.0.1:8000/copy/leaders \
 ### Copy-trade safety
 
 - Followers default to **paper** ledger under `~/.local/share/sniper_trades/copy_trade.json`
-- **Live** mode uses `cdcx trade order --dry-run` unless `confirm_live=true`
+- **Live** mode uses `cdcx trade order --dry-run` unless `confirm_live=true` and `confirmation_text="CONFIRM LIVE"`
 - No withdraw paths; live still needs funded Exchange keys
 
 ## Smoothness profile

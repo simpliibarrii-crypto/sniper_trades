@@ -173,7 +173,7 @@ def run_research(
         plan = build_structured_plan(intent, nodes)
         text = final_output.get("output_text") or synthesize_report(intent, plan)
         text = (
-            f"1. **jspace (Live Internal Thoughts)**:\n"
+            f"1. **jspace Decision Review**:\n"
             f"Market feed unavailable ({market_err}). Falling back to intent-only scaffold.\n"
             f"Bias check: without live OHLCV I cannot claim sniper confluence — "
             f"treat this as research notes only.\n\n"
