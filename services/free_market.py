@@ -357,19 +357,42 @@ _TICKER_CHAIN = (_binance_ticker, _kraken_ticker, _coinbase_ticker)
 _CANDLE_CHAIN = (_binance_candles, _kraken_candles, _coinbase_candles)
 
 
-def get_ticker(symbol: str) -> Dict[str, Any]:
+def get_ticker(symbol: str, use_cache: bool = True) -> Dict[str, Any]:
     inst = normalize_instrument(symbol)
+    if use_cache:
+        try:
+            from services import market_store
+
+            hit = market_store.get_cached_ticker(inst, max_age=4.0)
+            if hit:
+                return hit
+        except Exception:
+            pass
     errors: List[str] = []
     for fn in _TICKER_CHAIN:
         try:
-            return fn(inst)
+            row = fn(inst)
+            try:
+                from services import market_store
+
+                market_store.cache_ticker(inst, row)
+            except Exception:
+                pass
+            return row
         except Exception as exc:  # noqa: BLE001
             errors.append(f"{fn.__name__}: {exc}")
     # last resort: crypto.com public
     try:
         from services import cdc_market
 
-        return cdc_market.get_ticker(inst)
+        row = cdc_market.get_ticker(inst)
+        try:
+            from services import market_store
+
+            market_store.cache_ticker(inst, row)
+        except Exception:
+            pass
+        return row
     except Exception as exc:  # noqa: BLE001
         errors.append(f"cdc: {exc}")
     raise RuntimeError("all free ticker sources failed: " + " | ".join(errors[:4]))
@@ -379,15 +402,33 @@ def get_candles(
     symbol: str,
     timeframe: str = "1m",
     count: int = 100,
+    use_cache: bool = True,
 ) -> Dict[str, Any]:
     inst = normalize_instrument(symbol)
     tf = timeframe.strip()
     count = max(5, min(int(count), 1000))
+    if use_cache:
+        try:
+            from services import market_store
+
+            hit = market_store.get_cached_candles(inst, tf, count)
+            if hit and hit.get("candles"):
+                return hit
+        except Exception:
+            pass
     errors: List[str] = []
     for fn in _CANDLE_CHAIN:
         try:
             pack = fn(inst, tf, count)
             if pack.get("candles"):
+                try:
+                    from services import market_store
+
+                    market_store.upsert_candles(
+                        inst, tf, pack["candles"], source=str(pack.get("source") or "network")
+                    )
+                except Exception:
+                    pass
                 return pack
             errors.append(f"{fn.__name__}: empty")
         except Exception as exc:  # noqa: BLE001
@@ -395,9 +436,62 @@ def get_candles(
     try:
         from services import cdc_market
 
-        return cdc_market.get_candles(inst, tf, count)
+        pack = cdc_market.get_candles(inst, tf, count)
+        try:
+            from services import market_store
+
+            market_store.upsert_candles(
+                inst, tf, pack.get("candles") or [], source=str(pack.get("source") or "cdc")
+            )
+        except Exception:
+            pass
+        return pack
     except Exception as exc:  # noqa: BLE001
         errors.append(f"cdc: {exc}")
+    # stale cache fallback (any age) for resilience
+    try:
+        from services import market_store
+
+        # force-read without freshness by raw SQL path: get_cached with relaxed
+        market_store.init_db()
+        import sqlite3
+
+        with market_store._LOCK:
+            c = market_store._conn()
+            try:
+                rows = c.execute(
+                    """
+                    SELECT t,o,h,l,c,v,source FROM candles
+                    WHERE instrument=? AND timeframe=?
+                    ORDER BY t DESC LIMIT ?
+                    """,
+                    (inst, tf, count),
+                ).fetchall()
+                if rows:
+                    candles = [
+                        {
+                            "t": int(r["t"]),
+                            "o": r["o"],
+                            "h": r["h"],
+                            "l": r["l"],
+                            "c": r["c"],
+                            "v": r["v"],
+                        }
+                        for r in reversed(rows)
+                    ]
+                    return {
+                        "source": "sqlite_stale",
+                        "instrument": inst,
+                        "timeframe": tf,
+                        "count": len(candles),
+                        "candles": candles,
+                        "cached": True,
+                        "stale": True,
+                    }
+            finally:
+                c.close()
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"stale_cache: {exc}")
     raise RuntimeError("all free candle sources failed: " + " | ".join(errors[:5]))
 
 

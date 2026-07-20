@@ -13,13 +13,13 @@ def build_market_pack(
     primary_tf: str = "4h",
     extra_tfs: Optional[List[str]] = None,
     candle_count: int = 120,
+    fast: bool = False,
 ) -> Dict[str, Any]:
     """
     Pull ticker + candles for primary TF and a multi-TF stack from free
-    public APIs (Binance → Kraken → Coinbase → Crypto.com).
+    public APIs (Binance → Kraken → Coinbase → Crypto.com), via SQLite ledger cache.
 
-    Always includes short scales (1m, 5m) when the primary is intraday so
-    RavenTrader can cross-check micro structure.
+    fast=True: chart-priority pack — primary + a few key TFs only (much faster).
     """
     raw = symbol.strip()
     if "_" not in raw and not raw.upper().endswith(("USDT", "USD", "USDC")):
@@ -27,9 +27,15 @@ def build_market_pack(
     inst = free_market.normalize_instrument(raw)
 
     # Short-scale stack for free 1m feeds
-    short_stack = ("1m", "5m", "15m")
+    if fast:
+        short_stack = ("15m", "1h", "4h")  # primary already included
+    else:
+        short_stack = ("1m", "5m", "15m")
     tfs: List[str] = []
-    for tf in [primary_tf, *(extra_tfs or []), *short_stack, *MTF_STACK]:
+    stack = [primary_tf, *(extra_tfs or []), *short_stack]
+    if not fast:
+        stack.extend(MTF_STACK)
+    for tf in stack:
         t = (tf or "").strip()
         if not t:
             continue
@@ -46,17 +52,21 @@ def build_market_pack(
     except Exception as exc:  # noqa: BLE001
         ticker = {"source": "error", "instrument": inst, "error": str(exc)}
 
-    # More bars on 1m for usable RSI/MACD; fewer API weight on higher TF
     def _count_for(tf: str) -> int:
-        if tf in ("1m", "3m"):
-            return max(candle_count, 180)
-        if tf in ("5m", "15m"):
+        if tf == primary_tf:
             return max(candle_count, 120)
-        return candle_count
+        if tf in ("1m", "3m"):
+            return 120 if fast else max(candle_count, 120)
+        if tf in ("5m", "15m"):
+            return 100
+        return 80 if fast else candle_count
 
     timeframes: Dict[str, Any] = {}
     sources_used: List[str] = []
-    for tf in tfs[:8]:  # allow 1m+5m+15m+1h+4h+1D etc.
+    # primary first for chart paint
+    ordered = [primary_tf] + [t for t in tfs if t != primary_tf]
+    limit = 4 if fast else 8
+    for tf in ordered[:limit]:
         try:
             pack = free_market.get_candles(inst, timeframe=tf, count=_count_for(tf))
             timeframes[tf] = pack
@@ -78,5 +88,6 @@ def build_market_pack(
         "ticker": ticker,
         "timeframes": timeframes,
         "data_sources": sources_used,
-        "feed": "free_public",
+        "feed": "free_public+ledger",
+        "fast": fast,
     }

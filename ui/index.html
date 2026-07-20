@@ -478,7 +478,7 @@
       <button class="ghost" id="themeToggle" type="button" aria-label="Toggle color theme">Light mode</button>
       <button class="primary" id="tradeNowHeader" type="button">Trade now</button>
       <span class="badge" title="No transaction can leave without a wallet or typed confirmation">Defense locked</span>
-      <span class="badge" id="ver">v6.6</span>
+      <span class="badge" id="ver">v6.7</span>
     </div>
   </header>
 
@@ -832,12 +832,29 @@
       <div class="card"><p class="hint">Organizing Raven's tools and connections…</p></div>
     </section>
 
+    <section class="card" style="margin-top:.85rem">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Movement chain</p>
+          <h3>Blockchain-style market ledger</h3>
+        </div>
+        <button class="ghost" id="chainRefresh" type="button">Refresh chain</button>
+      </div>
+      <p class="hint">Every candle refresh is stored in local SQLite and sealed as a hash-linked block (prev_hash → block_hash). This documents market movement for speed (cache) and accuracy (audit). No external Postgres required.</p>
+      <div class="result-grid" id="chainStats">
+        <div><span>Candles cached</span><b id="chainCandles">—</b></div>
+        <div><span>Chain blocks</span><b id="chainBlocks">—</b></div>
+        <div><span>Instruments</span><b id="chainInst">—</b></div>
+      </div>
+      <pre id="chainOut" style="margin-top:.75rem;max-height:240px">// chain tip loads here</pre>
+    </section>
+
     <div class="grid two" style="margin-top:.85rem">
       <section class="card">
         <p class="eyebrow">What Raven can see</p>
         <h3>Observable data only</h3>
-        <p class="hint">Public prices, candles, order-book depth, public news, public token data, and a public wallet address only after you approve Phantom. Balances are never guessed.</p>
-        <div class="security-strip"><span class="pill ok">No seed phrases</span><span class="pill ok">No private keys</span><span class="pill ok">No hidden wallet sync</span></div>
+        <p class="hint">Public prices, candles, order-book depth, public news, public token data, and a public wallet address only after you approve Phantom. Balances are never guessed. SQLite ledger accelerates charts between network pulls.</p>
+        <div class="security-strip"><span class="pill ok">No seed phrases</span><span class="pill ok">No private keys</span><span class="pill ok">No hidden wallet sync</span><span class="pill live">Local ledger</span></div>
       </section>
       <section class="card">
         <p class="eyebrow">What Raven cannot do silently</p>
@@ -850,6 +867,18 @@
 
   <!-- ═══ RESEARCH ═══ -->
   <div class="panel" id="panel-research" role="tabpanel" aria-labelledby="tab-research">
+    <section class="card" style="margin-bottom:.85rem">
+      <p class="eyebrow">Deep scan</p>
+      <h3 style="margin:0 0 .35rem">J-Space research · multi-TF sniper brief</h3>
+      <p class="hint" style="margin:0">Runs the same Raven engine as the flight deck, but as a one-shot report you can save and share. Templates prefill accurate market language.</p>
+      <div class="row" style="margin-top:.65rem" id="researchTemplates">
+        <button class="ghost tpl" type="button" data-q="BTC 1m sniper scalp plan with invalidation">BTC 1m scalp</button>
+        <button class="ghost tpl" type="button" data-q="long BTC 4h accumulation near support with risk plan">BTC 4h accumulation</button>
+        <button class="ghost tpl" type="button" data-q="ETH 1h trend continuation long or hold">ETH 1h trend</button>
+        <button class="ghost tpl" type="button" data-q="SOL short 15m breakdown only if HTF aligns">SOL breakdown</button>
+        <button class="ghost tpl" type="button" data-q="market regime scan BTC ETH SOL risk-off check">Regime scan</button>
+      </div>
+    </section>
     <div class="grid two">
       <section class="card">
         <div class="field">
@@ -864,21 +893,28 @@
           <label class="chk"><input type="checkbox" id="reuse" checked/> Reuse session</label>
           <label class="chk"><input type="checkbox" id="cf" checked/> Counterfactual</label>
         </div>
-        <button class="primary" id="go" type="button" style="width:100%">Run research</button>
+        <button class="primary" id="go" type="button" style="width:100%">Run deep scan</button>
         <div class="meta">
           <span class="pill" id="lat">latency —</span>
           <span class="pill" id="st">status idle</span>
           <button class="ghost" id="clear" type="button">Clear session</button>
           <button class="ghost" id="copyPrompt" type="button">Copy prompt</button>
         </div>
+        <div class="result-box" id="researchBrief" style="margin-top:.85rem">
+          <span style="color:var(--mut);font-size:.72rem;text-transform:uppercase">Last brief</span>
+          <b id="researchBriefText" style="display:block;margin-top:.35rem;font-weight:600">Run a scan to fill this panel with a live verdict, entry, stop, and TP.</b>
+        </div>
       </section>
       <section class="card plan">
-        <h3>Structured plan</h3>
+        <h3>Structured plan + ledger</h3>
         <dl id="planR">
-          <dt>Waiting</dt>
-          <dd>Run research to populate plan.</dd>
+          <dt>Status</dt>
+          <dd>Ready — pick a template or run a query. Uses the SQLite market ledger when warm.</dd>
+          <dt>Accuracy</dt>
+          <dd>Prices from free exchanges; plans are research-only until you paper/confirm live.</dd>
         </dl>
-        <pre id="out" style="margin-top:.75rem;max-height:320px">// JSON</pre>
+        <div id="ledgerMini" class="hint" style="margin-top:.65rem">Loading ledger stats…</div>
+        <pre id="out" style="margin-top:.75rem;max-height:320px">// Full research JSON appears here after a run</pre>
       </section>
     </div>
   </div>
@@ -886,6 +922,21 @@
   <!-- ═══ COPY TRADE ═══ -->
   <div class="panel" id="panel-copy" role="tabpanel" aria-labelledby="tab-copy">
     <div class="disclosure" style="margin-bottom:.85rem"><strong>Execution safety:</strong> followers use a local paper ledger by default. Live followers stay in dry-run unless the final signal includes both the live toggle and the exact typed phrase <code>CONFIRM LIVE</code>. There is no withdrawal path.</div>
+    <section class="card" style="margin-bottom:.85rem">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Paper desk</p>
+          <h3 style="margin:0">Leaders mirror into paper followers</h3>
+        </div>
+        <button class="sm" id="seedPaper" type="button">Seed demo desk</button>
+      </div>
+      <p class="hint" style="margin:0">If this tab looked empty, your desk had no leaders yet. Seed creates <strong>Iron Grid</strong> leader + paper follower, or use the forms below.</p>
+      <div class="result-grid" style="margin-top:.65rem">
+        <div><span>Leaders</span><b id="copyLeadCount">—</b></div>
+        <div><span>Followers</span><b id="copyFollCount">—</b></div>
+        <div><span>Paper fills</span><b id="copyFillCount">—</b></div>
+      </div>
+    </section>
     <div class="grid copy">
       <section class="card">
         <h3>Register leader</h3>
@@ -1050,11 +1101,16 @@ document.querySelectorAll('.tab').forEach((btn) => {
     btn.classList.add('active');
     btn.setAttribute('aria-selected','true');
     btn.tabIndex = 0;
-    $('panel-' + btn.dataset.tab).classList.add('active');
+    const panel = $('panel-' + btn.dataset.tab);
+    if (panel) panel.classList.add('active');
+    else console.warn('missing panel', btn.dataset.tab);
     localStorage.setItem('sniper-tab', btn.dataset.tab);
-    if (btn.dataset.tab === 'copy') refreshCopyState();
+    if (btn.dataset.tab === 'copy') { refreshCopyState(); ensurePaperDesk(); }
     if (btn.dataset.tab === 'deck' && !deckEs) loadNewsOnce();
-    if (btn.dataset.tab === 'connections') loadConnections(true);
+    if (btn.dataset.tab === 'connections') { loadConnections(true); loadChain(); }
+    if (btn.dataset.tab === 'research') { loadLedgerMini(); }
+    // resize chart when returning to deck
+    if (btn.dataset.tab === 'deck') setTimeout(() => { try { resizeChart(); } catch(_){} }, 50);
   });
   btn.addEventListener('keydown', (event) => {
     if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
@@ -2145,10 +2201,19 @@ async function runResearch() {
     const data = await res.json();
     $('out').textContent = JSON.stringify(data, null, 2);
     const v = data.verdict || {};
+    const td = data.trade_decision || data.strategy_position || {};
+    const dir = v.verdict || td.direction || td.side || '—';
     $('planR').innerHTML = `
-      <dt>Verdict</dt><dd><strong>${esc(v.verdict || (data.trade_decision||{}).direction || '—')}</strong> · ${esc(v.conviction ?? '—')}%</dd>
+      <dt>Verdict</dt><dd><strong>${esc(dir)}</strong> · ${esc(v.conviction ?? '—')}% conviction</dd>
+      <dt>Entry / Stop / TP1</dt><dd>${esc(fmt(td.entry,2))} · ${esc(fmt(td.stop_loss,2))} · ${esc(fmt(td.take_profit_1,2))}</dd>
+      <dt>R:R · size</dt><dd>${esc(td.risk_reward ?? '—')} · ${esc(td.position_size_pct ?? 0)}% risk</dd>
       <dt>Summary</dt><dd>${esc(data.summary || '—')}</dd>
+      <dt>Sources</dt><dd>${esc((data.data_sources || []).join(', ') || 'ledger / free markets')}</dd>
     `;
+    if ($('researchBriefText')) {
+      $('researchBriefText').textContent = `${dir} · ${v.conviction ?? '—'}% · Entry ${fmt(td.entry,2)} · Stop ${fmt(td.stop_loss,2)} · TP1 ${fmt(td.take_profit_1,2)} — ${data.summary || ''}`;
+    }
+    loadLedgerMini();
     $('lat').textContent = 'latency ' + (data.latency_ms ?? (performance.now() - t0).toFixed(1)) + ' ms';
     setStatus(res.ok, res.ok ? 'ok · ' + (data.trader || 'Sniper') : 'error');
   } catch (e) {
@@ -2283,6 +2348,95 @@ $('sigBuy').addEventListener('click', () => emitSide('BUY'));
 $('sigSell').addEventListener('click', () => emitSide('SELL'));
 $('refreshCopy').addEventListener('click', refreshCopyState);
 
+/* research templates + paper seed + ledger */
+document.querySelectorAll('#researchTemplates .tpl').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    if ($('q')) $('q').value = btn.dataset.q || '';
+    $('go')?.click();
+  });
+});
+async function loadLedgerMini() {
+  try {
+    const s = await (await fetch('/ledger/stats')).json();
+    if ($('ledgerMini')) {
+      $('ledgerMini').innerHTML = `Ledger: <strong>${s.candles || 0}</strong> candles · <strong>${s.blocks || 0}</strong> chain blocks · <strong>${s.instruments || 0}</strong> instruments<br/><code style="font-size:.68rem">${esc(s.db_path || '')}</code>`;
+    }
+  } catch (e) {
+    if ($('ledgerMini')) $('ledgerMini').textContent = 'Ledger unavailable: ' + e;
+  }
+}
+async function loadChain() {
+  try {
+    const [s, ch] = await Promise.all([
+      fetch('/ledger/stats').then((r) => r.json()),
+      fetch('/ledger/chain?limit=12').then((r) => r.json()),
+    ]);
+    if ($('chainCandles')) $('chainCandles').textContent = s.candles ?? '—';
+    if ($('chainBlocks')) $('chainBlocks').textContent = s.blocks ?? '—';
+    if ($('chainInst')) $('chainInst').textContent = s.instruments ?? '—';
+    if ($('chainOut')) {
+      const tip = ch.tip || {};
+      $('chainOut').textContent = JSON.stringify({
+        integrity_ok: ch.integrity_ok,
+        tip: tip.block_hash ? {
+          block_hash: tip.block_hash,
+          prev_hash: tip.prev_hash,
+          instrument: tip.instrument,
+          timeframe: tip.timeframe,
+          bars: tip.bar_count,
+          merkle_root: tip.merkle_root,
+        } : null,
+        recent: (ch.blocks || []).slice(0, 8).map((b) => ({
+          id: b.id, instrument: b.instrument, tf: b.timeframe, hash: (b.block_hash || '').slice(0, 16) + '…',
+        })),
+        note: ch.note,
+      }, null, 2);
+    }
+  } catch (e) {
+    if ($('chainOut')) $('chainOut').textContent = String(e);
+  }
+}
+if ($('chainRefresh')) $('chainRefresh').addEventListener('click', loadChain);
+
+async function ensurePaperDesk() {
+  try {
+    const st = await (await fetch('/copy/state')).json();
+    const nL = (st.leaders || []).length;
+    const nF = (st.followers || []).length;
+    const nFill = (st.fills || []).length;
+    if ($('copyLeadCount')) $('copyLeadCount').textContent = nL;
+    if ($('copyFollCount')) $('copyFollCount').textContent = nF;
+    if ($('copyFillCount')) $('copyFillCount').textContent = nFill;
+  } catch (_) {}
+}
+async function seedPaperDesk() {
+  try {
+    const st = await (await fetch('/copy/state')).json();
+    let lid = (st.leaders && st.leaders[0] && st.leaders[0].leader_id) || null;
+    if (!lid) {
+      const L = await (await fetch('/copy/leaders', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Iron Grid', symbols: ['BTC_USDT', 'ETH_USDT'] }),
+      })).json();
+      lid = L.leader_id;
+    }
+    if (!(st.followers || []).length && lid) {
+      await fetch('/copy/followers', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Paper Bot', leader_id: lid, mode: 'paper', max_notional_usd: 100 }),
+      });
+    }
+    if ($('follLead')) $('follLead').value = lid || '';
+    if ($('sigLead')) $('sigLead').value = lid || '';
+    await refreshCopyState();
+    await ensurePaperDesk();
+    toast('Paper desk ready — emit a BUY/SELL signal to practice.', 'ok');
+  } catch (e) {
+    toast(String(e.message || e), 'err');
+  }
+}
+if ($('seedPaper')) $('seedPaper').addEventListener('click', seedPaperDesk);
+
 /* boot */
 if ($('deckTf')) {
   $('deckTf').addEventListener('change', () => {
@@ -2293,6 +2447,7 @@ if ($('deckTf')) {
 fetch('/health').then((r) => r.json()).then((d) => {
   if (d.version) $('ver').textContent = 'v' + d.version;
 }).catch(() => {});
+loadLedgerMini();
 fetch('/grok/status').then((r) => r.json()).then(applyGrokStatus).catch(() => {});
 fetch('/portfolio/paper').then((r) => r.json()).then(applyPortfolio).catch(() => {});
 async function primeDashboard() {

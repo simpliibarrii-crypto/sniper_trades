@@ -46,6 +46,7 @@ from services import (
     free_market,
     grok_live,
     integrations,
+    market_store,
     paper_portfolio,
     pipeline,
     solana_wallet,
@@ -71,6 +72,10 @@ if _settings.xai_model:
 async def lifespan(app: FastAPI):
     pipeline.warm()
     get_engine()  # load copy-trade ledger early
+    try:
+        market_store.init_db()
+    except Exception:
+        pass
     yield
     pipeline.shutdown()
 
@@ -257,6 +262,22 @@ async def portfolio_paper():
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@app.get("/ledger/stats")
+async def ledger_stats():
+    """SQLite market ledger stats (embedded traffic store)."""
+    return await asyncio.to_thread(market_store.stats)
+
+
+@app.get("/ledger/chain")
+async def ledger_chain(
+    limit: int = Query(24, ge=1, le=100),
+    instrument: Optional[str] = Query(None, max_length=32),
+):
+    """Hash-linked movement blocks documenting candle refreshes (local blockchain-style)."""
+    inst = free_market.normalize_instrument(instrument) if instrument else None
+    return await asyncio.to_thread(market_store.chain_tip, limit, inst)
+
+
 @app.get("/manifest.webmanifest")
 async def web_manifest():
     path = _UI_DIR / "manifest.webmanifest"
@@ -369,10 +390,19 @@ async def live_deck(
             inst.split("_")[0].upper() if "_" in inst else inst.upper()
         )
         intent_base["timeframe"] = timeframe
+        # Instant chart paint from SQLite ledger if present
+        try:
+            cached = await asyncio.to_thread(
+                market_store.get_cached_candles, inst, timeframe, 120
+            )
+        except Exception:
+            cached = None
         yield (
             "event: hello\n"
-            f"data: {json.dumps({'deck': True, 'instrument': inst, 'timeframe': timeframe, 'grok': grok_live.grok_status()})}\n\n"
+            f"data: {json.dumps({'deck': True, 'instrument': inst, 'timeframe': timeframe, 'grok': grok_live.grok_status(), 'ledger': market_store.stats()})}\n\n"
         )
+        if cached and cached.get("candles"):
+            yield f"event: candles\ndata: {json.dumps({'instrument': inst, 'timeframe': timeframe, 'source': cached.get('source'), 'candles': cached['candles'], 'cached': True})}\n\n"
         prior: Optional[dict] = None
         tick = 0
         last_news: Optional[dict] = None
@@ -382,10 +412,13 @@ async def live_deck(
                 ticker = await asyncio.to_thread(free_market.get_ticker, inst)
                 yield f"event: ticker\ndata: {json.dumps(ticker)}\n\n"
 
-                market = await asyncio.to_thread(build_market_pack, inst, timeframe)
+                # Fast pack for live deck: primary + few TFs, cache-backed
+                market = await asyncio.to_thread(
+                    build_market_pack, inst, timeframe, None, 120, True
+                )
                 pack = (market.get("timeframes") or {}).get(timeframe) or {}
                 candles = (pack.get("candles") or [])[-120:]
-                yield f"event: candles\ndata: {json.dumps({'instrument': inst, 'timeframe': timeframe, 'source': pack.get('source'), 'candles': candles})}\n\n"
+                yield f"event: candles\ndata: {json.dumps({'instrument': inst, 'timeframe': timeframe, 'source': pack.get('source'), 'candles': candles, 'cached': bool(pack.get('cached'))})}\n\n"
 
                 raven = await asyncio.to_thread(
                     raven_analyze, intent_base, market, [], prior
