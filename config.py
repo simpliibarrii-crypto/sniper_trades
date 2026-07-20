@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "RavenTrade Core · Sniper Trades"
-    version: str = "6.9.0"
+    version: str = "6.10.0"
     # 0.0.0.0 so phones on the same LAN can open the deck
     host: str = "0.0.0.0"
     port: int = 8000
@@ -25,9 +25,9 @@ class Settings(BaseSettings):
     broadcast_top_k: int = 7
     cors_origins: str = "*"  # comma-separated
     access_log: bool = False
-    # xAI / Grok (optional — local fallback if unset)
-    xai_api_key: str = ""  # or env XAI_API_KEY / SNIPER_XAI_API_KEY
-    xai_model: str = "grok-4-1-fast-non-reasoning"
+    # xAI / Grok — prefer Grok Build session (~/.grok/auth.json) over console key
+    xai_api_key: str = ""  # optional console key; session used first
+    xai_model: str = "grok-4.5"
 
     @property
     def cors_origin_list(self) -> list[str]:
