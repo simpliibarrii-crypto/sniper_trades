@@ -9,6 +9,8 @@
   <meta name="mobile-web-app-capable" content="yes"/>
   <link rel="manifest" href="/manifest.webmanifest"/>
   <title>RavenTrade Core · Crypto Intelligence</title>
+  <!-- TradingView Lightweight Charts — real time axis, live bars, price lines -->
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
   <style>
     :root {
       color-scheme: dark;
@@ -223,16 +225,17 @@
     .live-strip .v.sell { color: var(--sell); }
     .live-strip .v.acc { color: var(--acc2); }
     .chart-wrap {
-      position: relative; width: 100%; height: min(56vh, 540px); min-height: 340px;
+      position: relative; width: 100%; height: min(58vh, 560px); min-height: 380px;
       background: #0a0e16;
       border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
     }
-    .chart-wrap canvas { width: 100%; height: 100%; display: block; position: relative; z-index: 1; }
+    #chartHost { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; }
     .chart-empty {
-      position: absolute; inset: 0; z-index: 2; display: none; align-items: center; justify-content: center;
-      color: var(--mut); font-size: .88rem; background: rgba(10,14,22,.72); pointer-events: none;
+      position: absolute; inset: 0; z-index: 3; display: none; align-items: center; justify-content: center;
+      color: var(--mut); font-size: .88rem; background: rgba(10,14,22,.78); pointer-events: none;
     }
     .chart-empty.show { display: flex; }
+    .chart-hud { z-index: 4; }
     .chart-hero .card, section.chart-hero { border-color: color-mix(in srgb, var(--acc) 25%, var(--line)); }
     details.more {
       border: 1px solid var(--line); border-radius: 12px; padding: .7rem .85rem;
@@ -475,7 +478,7 @@
       <button class="ghost" id="themeToggle" type="button" aria-label="Toggle color theme">Light mode</button>
       <button class="primary" id="tradeNowHeader" type="button">Trade now</button>
       <span class="badge" title="No transaction can leave without a wallet or typed confirmation">Defense locked</span>
-      <span class="badge" id="ver">v6.5</span>
+      <span class="badge" id="ver">v6.6</span>
     </div>
   </header>
 
@@ -592,19 +595,18 @@
       <div class="chart-wrap">
         <div class="chart-empty show" id="chartEmpty">Starting live feed…</div>
         <div class="chart-hud" id="chartHud">Waiting for candles…</div>
-        <canvas id="chart" width="1200" height="520" aria-label="Live trading chart with AI tools"></canvas>
+        <div id="chartHost" role="img" aria-label="Live trading chart with time axis and AI entry/exit"></div>
       </div>
       <div class="chart-legend" id="chartLegend">
-        <span><i style="background:#22c55e"></i>Up candle</span>
+        <span><i style="background:#22c55e"></i>Up</span>
         <span><i style="background:#ef4444"></i>Down</span>
         <span><i style="background:#60a5fa"></i>SMA20</span>
         <span><i style="background:#eab308"></i>SMA50</span>
         <span><i style="background:#a78bfa"></i>EMA21</span>
-        <span><i style="background:rgba(167,139,250,.55)"></i>Bollinger</span>
-        <span><i style="background:#22c55e"></i>Support / TP</span>
+        <span><i style="background:#22c55e"></i>TP / Support</span>
         <span><i style="background:#ef4444"></i>Stop / Res</span>
-        <span><i style="background:#eab308"></i>Fib</span>
-        <span><i style="background:#c4b5fd"></i>AI scan</span>
+        <span><i style="background:#a855f7"></i>AI Entry</span>
+        <span><i style="background:#94a3b8"></i>Time axis · live</span>
       </div>
       <div class="tool-activity" id="toolActivity" aria-label="AI tools animating on chart"></div>
       <div class="volume-oracle" id="volumeOracle" style="margin-top:.55rem">
@@ -1194,137 +1196,85 @@ async function loadMarketRadar() {
 }
 $('radarRefresh').addEventListener('click', loadMarketRadar);
 
-/* ── chart engine v6.5 (stable, candle-first scale, throttled) ─────────── */
+/* ── Lightweight Charts engine v6.6 (time axis + live + AI markers) ───── */
 let candlesCache = [];
 let lastPrice = null;
 let chartOverlay = null;
-let chartDirty = true;
-let toolsDeployed = false;
-let aiAnim = { t0: performance.now(), scan: 0, toolPhase: 0, raf: 0, lastDraw: 0, frame: 0 };
+let lwChart = null;
+let candleSeries = null;
+let volumeSeries = null;
+let sma20Series = null;
+let sma50Series = null;
+let ema21Series = null;
+let priceLines = [];
+let chartReady = false;
 const TOOL_ORDER = [
   'Candles','Volume','SMA20','EMA21','SMA50','Bollinger','Fib','Pivots','S/R',
   'Order Block','RSI','MACD','ATR','Stochastic','Ichimoku','Volume Profile'
 ];
-const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-function applyTicker(t) {
-  if (!t) return;
-  const px = t.last ?? t.ask ?? t.bid;
-  const el = $('lastPx');
-  el.textContent = fmt(px, px > 100 ? 2 : 6);
-  if (lastPrice != null && px != null) el.className = 'px ' + (px >= lastPrice ? 'up' : 'down');
-  if (px != null) lastPrice = px;
-  $('bidPx').textContent = fmt(t.bid, 2);
-  $('askPx').textContent = fmt(t.ask, 2);
-  const chgTxt = t.change != null ? (Number(t.change) * 100).toFixed(2) + '%' : '—';
-  $('chgPx').textContent = chgTxt;
-  if ($('hiPx')) $('hiPx').textContent = fmt(t.high, 2);
-  if ($('loPx')) $('loPx').textContent = fmt(t.low, 2);
-  if ($('volPx')) $('volPx').textContent = fmt(t.volume, 2);
-  $('srcPx').textContent = t.source || '—';
-  const inst = t.instrument || $('deckSym').value;
-  $('instLabel').textContent = inst;
-  $('deckSrc').textContent = 'feed ' + (t.source || '—');
-  $('kpiMarket').textContent = String(inst).split('_')[0] + ' ' + fmt(px, px > 100 ? 2 : 6);
-  $('kpiMarketNote').textContent = (t.source || 'public feed') + (t.change != null ? ' · ' + chgTxt + ' 24h' : '');
-  $('kpiMarketDot').className = 'live-dot on';
-  // sticky live strip
-  if ($('lsInst')) $('lsInst').textContent = inst;
-  if ($('lsLast')) {
-    $('lsLast').textContent = fmt(px, px > 100 ? 2 : 6);
-    if (lastPrice != null && px != null) $('lsLast').className = 'v ' + (px >= lastPrice ? 'buy' : 'sell');
-  }
-  if ($('lsChg')) {
-    $('lsChg').textContent = chgTxt;
-    $('lsChg').className = 'v ' + (t.change != null && Number(t.change) >= 0 ? 'buy' : t.change != null ? 'sell' : '');
-  }
-  if ($('lsFeed')) $('lsFeed').textContent = t.source || '—';
-  checkPriceAlert(px);
-  if (candlesCache.length && px != null) {
-    const last = candlesCache[candlesCache.length - 1];
-    last.c = px;
-    if (px > last.h) last.h = px;
-    if (px < last.l) last.l = px;
-    chartDirty = true;
-  }
+function toUnix(t) {
+  let n = Number(t);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  // ms → seconds
+  if (n > 1e12) n = Math.floor(n / 1000);
+  return n;
 }
 
-function setCandles(candles, source) {
-  candlesCache = candles || [];
-  const empty = $('chartEmpty');
-  if (empty) {
-    if (candlesCache.length >= 5) empty.classList.remove('show');
-    else {
-      empty.classList.add('show');
-      empty.textContent = candlesCache.length ? 'Need more bars…' : 'Waiting for candles…';
-    }
-  }
-  if (source) {
-    $('srcPx').textContent = source;
-    if ($('lsFeed')) $('lsFeed').textContent = source;
-  }
-  chartDirty = true;
-  ensureChartLoop();
-}
-
-function setChartOverlay(ov) {
-  chartOverlay = ov || null;
-  if (!toolsDeployed) {
-    renderToolActivity(ov);
-    toolsDeployed = true;
-    aiAnim.t0 = performance.now();
-  } else {
-    // keep chips lit without restart
-    document.querySelectorAll('#toolActivity .tool-chip').forEach((c) => c.classList.add('on'));
-  }
-  chartDirty = true;
-  ensureChartLoop();
-}
-
-function renderToolActivity(ov) {
-  const el = $('toolActivity');
-  if (!el) return;
-  const active = (ov && ov.tools_active) || TOOL_ORDER;
-  el.innerHTML = active.map((name, i) =>
-    `<span class="tool-chip on" data-tool="${esc(name)}" data-i="${i}">${esc(name)}</span>`
-  ).join('');
-}
-
-function ensureChartLoop() {
-  if (aiAnim.raf) return;
-  const loop = (now) => {
-    aiAnim.raf = requestAnimationFrame(loop);
-    aiAnim.frame++;
-    if (!reduceMotion) {
-      aiAnim.scan = ((now - aiAnim.t0) / 5200) % 1;
-      if (!toolsDeployed) aiAnim.toolPhase = ((now - aiAnim.t0) / 700) % (TOOL_ORDER.length + 2);
-      else aiAnim.toolPhase = TOOL_ORDER.length + 1;
-    } else {
-      aiAnim.scan = 0.85;
-      aiAnim.toolPhase = TOOL_ORDER.length + 1;
-    }
-    // throttle full draws ~20fps unless dirty
-    const minGap = chartDirty ? 40 : 70;
-    if (now - aiAnim.lastDraw >= minGap && candlesCache.length) {
-      aiAnim.lastDraw = now;
-      chartDirty = false;
-      drawChart(candlesCache, now);
-    }
-    const chips = document.querySelectorAll('#toolActivity .tool-chip');
-    const phase = Math.floor(aiAnim.toolPhase);
-    chips.forEach((chip, i) => {
-      chip.classList.toggle('on', i <= phase || toolsDeployed);
-      chip.classList.toggle('scan', !toolsDeployed && i === phase && !reduceMotion);
+function candlesToLW(candles) {
+  const out = [];
+  for (const c of candles || []) {
+    const time = toUnix(c.t);
+    if (time == null || c.o == null || c.h == null || c.l == null || c.c == null) continue;
+    out.push({
+      time,
+      open: Number(c.o),
+      high: Number(c.h),
+      low: Number(c.l),
+      close: Number(c.c),
     });
-    if ($('aiScanPill')) {
-      const tool = TOOL_ORDER[Math.min(phase, TOOL_ORDER.length - 1)] || 'Candles';
-      $('aiScanPill').textContent = candlesCache.length
-        ? (toolsDeployed ? 'AI live · tools armed' : ('AI drawing · ' + tool))
-        : 'AI idle';
-      $('aiScanPill').className = 'pill live';
-    }
-  };
-  aiAnim.raf = requestAnimationFrame(loop);
+  }
+  // lightweight-charts requires ascending unique times
+  out.sort((a, b) => a.time - b.time);
+  const dedup = [];
+  for (const bar of out) {
+    if (dedup.length && dedup[dedup.length - 1].time === bar.time) dedup[dedup.length - 1] = bar;
+    else dedup.push(bar);
+  }
+  return dedup;
+}
+
+function volumesToLW(candles) {
+  const out = [];
+  for (const c of candles || []) {
+    const time = toUnix(c.t);
+    if (time == null) continue;
+    const up = Number(c.c) >= Number(c.o);
+    out.push({
+      time,
+      value: Number(c.v) || 0,
+      color: up ? 'rgba(34,197,94,0.45)' : 'rgba(239,68,68,0.45)',
+    });
+  }
+  out.sort((a, b) => a.time - b.time);
+  const dedup = [];
+  for (const bar of out) {
+    if (dedup.length && dedup[dedup.length - 1].time === bar.time) dedup[dedup.length - 1] = bar;
+    else dedup.push(bar);
+  }
+  return dedup;
+}
+
+function maLine(candles, period, kind) {
+  const bars = candlesToLW(candles);
+  const closes = bars.map((b) => b.close);
+  const vals = kind === 'ema' ? emaSeries(closes, period) : rollingSma(closes, period);
+  const out = [];
+  for (let i = 0; i < bars.length; i++) {
+    if (vals[i] == null || Number.isNaN(vals[i])) continue;
+    out.push({ time: bars[i].time, value: vals[i] });
+  }
+  return out;
 }
 
 function rollingSma(arr, n) {
@@ -1344,314 +1294,290 @@ function emaSeries(arr, n) {
   for (let i = 1; i < arr.length; i++) out.push(arr[i] * k + out[i - 1] * (1 - k));
   return out;
 }
-function bbSeries(arr, n) {
-  const mid = [], upper = [], lower = [];
-  for (let i = 0; i < arr.length; i++) {
-    if (i + 1 < n) { mid.push(null); upper.push(null); lower.push(null); continue; }
-    let s = 0;
-    for (let j = i + 1 - n; j <= i; j++) s += arr[j];
-    const m = s / n;
-    let v = 0;
-    for (let j = i + 1 - n; j <= i; j++) v += (arr[j] - m) ** 2;
-    const std = Math.sqrt(v / n);
-    mid.push(m); upper.push(m + 2 * std); lower.push(m - 2 * std);
+
+function destroyChart() {
+  if (lwChart) {
+    try { lwChart.remove(); } catch (_) {}
   }
-  return { mid, upper, lower };
+  lwChart = null;
+  candleSeries = volumeSeries = sma20Series = sma50Series = ema21Series = null;
+  priceLines = [];
+  chartReady = false;
 }
 
-function seriesLine(ctx, values, xOf, yOf, color, width, reveal) {
-  if (!values || !values.length) return;
-  const n = values.length;
-  const end = Math.max(2, Math.floor(n * reveal));
-  ctx.beginPath();
-  let started = false;
-  for (let i = 0; i < end; i++) {
-    const v = values[i];
-    if (v == null || Number.isNaN(v)) { started = false; continue; }
-    const x = xOf(i), y = yOf(v);
-    if (!started) { ctx.moveTo(x, y); started = true; }
-    else ctx.lineTo(x, y);
+function initChart() {
+  const host = $('chartHost');
+  if (!host || typeof LightweightCharts === 'undefined') {
+    console.error('LightweightCharts not loaded');
+    return false;
   }
-  ctx.strokeStyle = color;
-  ctx.lineWidth = width;
-  ctx.lineJoin = 'round';
-  ctx.stroke();
+  destroyChart();
+  const w = host.clientWidth || host.parentElement.clientWidth || 800;
+  const h = host.clientHeight || 420;
+  lwChart = LightweightCharts.createChart(host, {
+    width: w,
+    height: h,
+    layout: {
+      background: { type: 'solid', color: '#0a0e16' },
+      textColor: '#94a3b8',
+      fontSize: 11,
+    },
+    grid: {
+      vertLines: { color: 'rgba(36,48,68,0.7)' },
+      horzLines: { color: 'rgba(36,48,68,0.7)' },
+    },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    rightPriceScale: { borderColor: '#243044', scaleMargins: { top: 0.08, bottom: 0.22 } },
+    timeScale: {
+      borderColor: '#243044',
+      timeVisible: true,
+      secondsVisible: false,
+      rightOffset: 4,
+      barSpacing: 8,
+      minBarSpacing: 3,
+    },
+    handleScroll: { vertTouchDrag: false },
+  });
+
+  candleSeries = lwChart.addCandlestickSeries({
+    upColor: '#22c55e',
+    downColor: '#ef4444',
+    borderUpColor: '#22c55e',
+    borderDownColor: '#ef4444',
+    wickUpColor: '#22c55e',
+    wickDownColor: '#ef4444',
+  });
+  volumeSeries = lwChart.addHistogramSeries({
+    priceFormat: { type: 'volume' },
+    priceScaleId: 'vol',
+  });
+  lwChart.priceScale('vol').applyOptions({
+    scaleMargins: { top: 0.82, bottom: 0 },
+  });
+  sma20Series = lwChart.addLineSeries({ color: '#60a5fa', lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
+  sma50Series = lwChart.addLineSeries({ color: '#eab308', lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
+  ema21Series = lwChart.addLineSeries({ color: '#a78bfa', lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
+
+  chartReady = true;
+  return true;
 }
 
-function drawChart(candles, now) {
-  const canvas = $('chart');
-  if (!canvas) return;
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.parentElement.getBoundingClientRect();
-  const W = Math.max(320, Math.floor(rect.width));
-  const H = Math.max(280, Math.floor(rect.height));
-  if (canvas.width !== W * dpr || canvas.height !== H * dpr) {
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
-    canvas.style.width = W + 'px';
-    canvas.style.height = H + 'px';
-  }
-  const ctx = canvas.getContext('2d');
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, W, H);
-  if (!candles.length) return;
+function ensureChart() {
+  if (chartReady && lwChart) return true;
+  return initChart();
+}
 
-  const ov = chartOverlay || {};
-  // Always compute MAs from visible candles (length-safe)
-  const closes = candles.map((c) => Number(c.c));
-  const series = {
-    sma20: rollingSma(closes, 20),
-    sma50: rollingSma(closes, 50),
-    ema21: emaSeries(closes, 21),
-    bb_mid: bbSeries(closes, 20).mid,
-    bb_upper: bbSeries(closes, 20).upper,
-    bb_lower: bbSeries(closes, 20).lower,
-    volume: candles.map((c) => Number(c.v) || 0),
-  };
-
-  const volH = Math.max(40, Math.floor(H * 0.15));
-  const pad = { t: 16, r: 64, b: volH + 16, l: 10 };
-  const plotW = W - pad.l - pad.r;
-  const plotH = H - pad.t - pad.b;
-
-  // CANDLE-FIRST scale (don't let far fib/TP crush candles)
-  let hi = -Infinity, lo = Infinity;
-  for (const c of candles) {
-    if (c.h != null && c.h > hi) hi = c.h;
-    if (c.l != null && c.l < lo) lo = c.l;
+function clearPriceLines() {
+  if (!candleSeries) return;
+  for (const pl of priceLines) {
+    try { candleSeries.removePriceLine(pl); } catch (_) {}
   }
-  if (!Number.isFinite(hi) || hi === lo) {
-    hi = (candles[candles.length - 1].c || 1) * 1.01;
-    lo = (candles[candles.length - 1].c || 1) * 0.99;
+  priceLines = [];
+}
+
+function addPlanLine(price, title, color, lineStyle) {
+  if (!candleSeries || price == null || !Number.isFinite(Number(price))) return;
+  const pl = candleSeries.createPriceLine({
+    price: Number(price),
+    color: color || '#a855f7',
+    lineWidth: 2,
+    lineStyle: lineStyle == null ? LightweightCharts.LineStyle.Dashed : lineStyle,
+    axisLabelVisible: true,
+    title: title || '',
+  });
+  priceLines.push(pl);
+}
+
+function applyOverlayToChart(ov) {
+  if (!ensureChart() || !candleSeries) return;
+  clearPriceLines();
+  const levels = (ov && ov.levels) || [];
+  const markersIn = (ov && ov.markers) || [];
+  // price lines for S/R and plan
+  for (const L of levels) {
+    const style = L.kind === 'fib' ? LightweightCharts.LineStyle.Dotted
+      : L.kind === 'pivot' ? LightweightCharts.LineStyle.LargeDashed
+      : LightweightCharts.LineStyle.Dashed;
+    addPlanLine(L.price, L.label, L.color || '#94a3b8', style);
   }
-  const baseRange = hi - lo || 1;
-  // Include nearby markers only
-  for (const M of (ov.markers || [])) {
+  for (const M of markersIn) {
+    const style = M.id === 'entry' ? LightweightCharts.LineStyle.Solid : LightweightCharts.LineStyle.Dashed;
+    addPlanLine(M.price, M.label, M.color || '#a855f7', style);
+  }
+  // markers (arrows) on last bar for AI entry / exit
+  const bars = candlesToLW(candlesCache);
+  if (!bars.length) {
+    candleSeries.setMarkers([]);
+    return;
+  }
+  const lastT = bars[bars.length - 1].time;
+  const marks = [];
+  for (const M of markersIn) {
     if (M.price == null) continue;
-    if (M.price >= lo - baseRange * 0.5 && M.price <= hi + baseRange * 0.5) {
-      hi = Math.max(hi, M.price);
-      lo = Math.min(lo, M.price);
+    let pos = 'inBar';
+    let shape = 'circle';
+    if (M.id === 'entry' || M.label === 'ENTRY') { pos = 'belowBar'; shape = 'arrowUp'; }
+    if (M.id === 'stop' || M.label === 'STOP') { pos = 'aboveBar'; shape = 'arrowDown'; }
+    if (M.id === 'tp1' || M.id === 'tp2' || String(M.label || '').startsWith('TP')) {
+      pos = 'aboveBar'; shape = 'arrowUp';
     }
+    marks.push({
+      time: lastT,
+      position: pos,
+      color: M.color || '#a855f7',
+      shape,
+      text: `${M.label} ${Number(M.price).toFixed(Number(M.price) > 100 ? 2 : 4)}`,
+    });
   }
-  for (const L of (ov.levels || [])) {
-    if (L.price == null) continue;
-    if (L.price >= lo - baseRange * 0.08 && L.price <= hi + baseRange * 0.08) {
-      hi = Math.max(hi, L.price);
-      lo = Math.min(lo, L.price);
-    }
-  }
-  const range = (hi - lo) || 1;
-  hi += range * 0.05;
-  lo -= range * 0.05;
-
-  const n = candles.length;
-  const slot = plotW / n;
-  const bodyW = Math.max(1.4, Math.min(12, slot * 0.64));
-  const yOf = (p) => pad.t + ((hi - p) / (hi - lo)) * plotH;
-  const xOf = (i) => pad.l + slot * i + slot / 2;
-  const inPlot = (y) => y >= pad.t - 2 && y <= pad.t + plotH + 2;
-
-  const phase = aiAnim.toolPhase;
-  const revealMA = toolsDeployed ? 1 : Math.min(1, Math.max(0.2, (phase - 1) / 3));
-  const revealBB = toolsDeployed ? 1 : Math.min(1, Math.max(0, (phase - 2) / 3));
-  const revealLevels = toolsDeployed ? 1 : Math.min(1, Math.max(0, (phase - 4) / 3));
-  const revealMarkers = toolsDeployed ? 1 : Math.min(1, Math.max(0, (phase - 6) / 2));
-
-  // soft grid
-  ctx.strokeStyle = 'rgba(36,48,68,.9)';
-  ctx.lineWidth = 1;
-  ctx.fillStyle = '#8b97ad';
-  ctx.font = '11px ui-sans-serif, system-ui, sans-serif';
-  for (let i = 0; i <= 5; i++) {
-    const y = pad.t + (plotH * i) / 5;
-    const price = hi - ((hi - lo) * i) / 5;
-    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
-    ctx.fillText(fmt(price, price > 100 ? 2 : 4), W - pad.r + 6, y + 3);
-  }
-
-  // order blocks
-  if (revealLevels > 0.15) {
-    for (const Z of (ov.zones || [])) {
-      if (Z.top == null || Z.bottom == null) continue;
-      if (Z.top < lo || Z.bottom > hi) continue;
-      const y1 = yOf(Z.top), y2 = yOf(Z.bottom);
-      const top = Math.min(y1, y2), zh = Math.max(2, Math.abs(y2 - y1));
-      const bull = Z.side === 'bullish';
-      ctx.fillStyle = bull ? 'rgba(34,197,94,.1)' : 'rgba(239,68,68,.1)';
-      ctx.fillRect(pad.l, top, plotW, zh);
-      ctx.strokeStyle = bull ? 'rgba(34,197,94,.45)' : 'rgba(239,68,68,.45)';
-      ctx.strokeRect(pad.l, top, plotW, zh);
-    }
-  }
-
-  // Bollinger
-  if (revealBB > 0.05) {
-    const end = Math.floor(n * revealBB);
-    ctx.beginPath();
-    let started = false;
-    for (let i = 0; i < end; i++) {
-      if (series.bb_upper[i] == null) continue;
-      const x = xOf(i), y = yOf(series.bb_upper[i]);
-      if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
-    }
-    for (let i = end - 1; i >= 0; i--) {
-      if (series.bb_lower[i] == null) continue;
-      ctx.lineTo(xOf(i), yOf(series.bb_lower[i]));
-    }
-    if (started) {
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(167,139,250,.07)';
-      ctx.fill();
-    }
-    seriesLine(ctx, series.bb_upper, xOf, yOf, 'rgba(167,139,250,.4)', 1, revealBB);
-    seriesLine(ctx, series.bb_lower, xOf, yOf, 'rgba(167,139,250,.4)', 1, revealBB);
-    seriesLine(ctx, series.bb_mid, xOf, yOf, 'rgba(167,139,250,.5)', 1, revealBB);
-  }
-
-  seriesLine(ctx, series.sma20, xOf, yOf, '#60a5fa', 1.5, revealMA);
-  seriesLine(ctx, series.ema21, xOf, yOf, '#a78bfa', 1.6, revealMA);
-  seriesLine(ctx, series.sma50, xOf, yOf, '#eab308', 1.4, revealMA);
-
-  // candles — high-contrast green/red
-  for (let i = 0; i < n; i++) {
-    const c = candles[i];
-    if (c.o == null || c.c == null) continue;
-    const x = xOf(i);
-    const up = c.c >= c.o;
-    ctx.strokeStyle = up ? '#22c55e' : '#ef4444';
-    ctx.fillStyle = up ? '#22c55e' : '#ef4444';
-    ctx.beginPath();
-    ctx.moveTo(x, yOf(c.h));
-    ctx.lineTo(x, yOf(c.l));
-    ctx.stroke();
-    const y1 = yOf(c.o), y2 = yOf(c.c);
-    ctx.fillRect(x - bodyW / 2, Math.min(y1, y2), bodyW, Math.max(1, Math.abs(y2 - y1)));
-  }
-
-  // volume
-  const vols = series.volume;
-  const maxV = Math.max(1, ...vols);
-  const vTop = H - pad.b + 4;
-  for (let i = 0; i < n; i++) {
-    const v = vols[i] || 0;
-    const vh = (v / maxV) * (volH - 12);
-    const up = candles[i] && candles[i].c >= candles[i].o;
-    ctx.fillStyle = up ? 'rgba(34,197,94,.35)' : 'rgba(239,68,68,.35)';
-    ctx.fillRect(xOf(i) - bodyW / 2, vTop + (volH - 12) - vh, bodyW, Math.max(1, vh));
-  }
-  ctx.fillStyle = '#64748b';
-  ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
-  ctx.fillText('Volume', pad.l, H - 5);
-
-  // right-side tags with collision avoidance
-  const tags = [];
-  const pushTag = (price, label, color, dash) => {
-    if (price == null || !Number.isFinite(price)) return;
-    if (price < lo || price > hi) {
-      // off-scale flag
-      tags.push({ price, label: label + (price > hi ? ' ↑' : ' ↓'), color, y: price > hi ? pad.t + 10 : pad.t + plotH - 4, off: true, dash });
-      return;
-    }
-    tags.push({ price, label, color, y: yOf(price), off: false, dash });
-  };
-
-  if (revealLevels > 0.1) {
-    for (const L of (ov.levels || [])) {
-      const dash = L.kind === 'fib' ? [2, 3] : L.kind === 'pivot' ? [6, 3] : [5, 4];
-      pushTag(L.price, L.label, L.color || '#94a3b8', dash);
-    }
-  }
-  if (revealMarkers > 0.05) {
-    for (const M of (ov.markers || [])) pushTag(M.price, M.label, M.color || '#a78bfa', [8, 4]);
-  }
-  const last = candles[n - 1];
-  if (last && last.c != null) pushTag(last.c, 'Last', '#c4b5fd', [3, 3]);
-
-  // sort tags by y and de-overlap
-  tags.sort((a, b) => a.y - b.y);
-  for (let i = 1; i < tags.length; i++) {
-    if (tags[i].y - tags[i - 1].y < 12) tags[i].y = tags[i - 1].y + 12;
-  }
-
-  for (const T of tags) {
-    if (!T.off && !inPlot(T.y)) continue;
-    ctx.save();
-    ctx.globalAlpha = 0.85;
-    ctx.strokeStyle = T.color;
-    ctx.setLineDash(T.dash || [4, 3]);
-    ctx.lineWidth = 1.1;
-    if (!T.off) {
-      ctx.beginPath();
-      ctx.moveTo(pad.l, T.y);
-      ctx.lineTo(W - pad.r, T.y);
-      ctx.stroke();
-    }
-    ctx.setLineDash([]);
-    // right badge
-    const txt = `${T.label} ${fmt(T.price, T.price > 100 ? 2 : 4)}`;
-    ctx.font = '600 10px ui-sans-serif, system-ui, sans-serif';
-    const tw = ctx.measureText(txt).width + 8;
-    const bx = W - pad.r + 2;
-    const by = T.y - 7;
-    ctx.fillStyle = T.color;
-    ctx.globalAlpha = 0.92;
-    ctx.fillRect(bx, by, Math.min(tw, pad.r - 4), 14);
-    ctx.fillStyle = '#0a0e16';
-    ctx.fillText(txt, bx + 4, by + 10);
-    ctx.restore();
-  }
-
-  // AI scan beam
-  if (!reduceMotion) {
-    const scanX = pad.l + plotW * aiAnim.scan;
-    const grad = ctx.createLinearGradient(scanX - 36, 0, scanX + 8, 0);
-    grad.addColorStop(0, 'rgba(167,139,250,0)');
-    grad.addColorStop(0.75, 'rgba(167,139,250,.15)');
-    grad.addColorStop(1, 'rgba(221,214,254,.5)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(scanX - 36, pad.t, 44, plotH);
-    ctx.strokeStyle = 'rgba(221,214,254,.85)';
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    ctx.moveTo(scanX, pad.t);
-    ctx.lineTo(scanX, pad.t + plotH);
-    ctx.stroke();
-    const idx = Math.min(n - 1, Math.max(0, Math.floor(aiAnim.scan * n)));
-    const cscan = candles[idx];
-    if (cscan && cscan.c != null) {
-      const cy = yOf(cscan.c);
-      ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(scanX, cy, 3.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#a78bfa';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-  }
-
-  updateChartHud(ov, last);
+  candleSeries.setMarkers(marks);
+  updateChartHud(ov, bars[bars.length - 1]);
 }
 
-function updateChartHud(ov, last) {
+function pushChartData(candles) {
+  if (!ensureChart()) return;
+  const bars = candlesToLW(candles);
+  const vols = volumesToLW(candles);
+  if (!bars.length) {
+    const empty = $('chartEmpty');
+    if (empty) { empty.classList.add('show'); empty.textContent = 'No candle data'; }
+    return;
+  }
+  const empty = $('chartEmpty');
+  if (empty) empty.classList.remove('show');
+
+  candleSeries.setData(bars);
+  volumeSeries.setData(vols);
+  sma20Series.setData(maLine(candles, 20, 'sma'));
+  sma50Series.setData(maLine(candles, 50, 'sma'));
+  ema21Series.setData(maLine(candles, 21, 'ema'));
+  // show real time scale and fit content on first full load
+  try {
+    lwChart.timeScale().fitContent();
+  } catch (_) {}
+}
+
+function updateLastBarLive(price) {
+  if (!chartReady || !candleSeries || !candlesCache.length || price == null) return;
+  const last = candlesCache[candlesCache.length - 1];
+  const time = toUnix(last.t);
+  if (time == null) return;
+  const open = Number(last.o);
+  const high = Math.max(Number(last.h), price);
+  const low = Math.min(Number(last.l), price);
+  candleSeries.update({
+    time,
+    open,
+    high,
+    low,
+    close: price,
+  });
+  volumeSeries.update({
+    time,
+    value: Number(last.v) || 0,
+    color: price >= open ? 'rgba(34,197,94,0.45)' : 'rgba(239,68,68,0.45)',
+  });
+}
+
+function resizeChart() {
+  if (!lwChart) return;
+  const host = $('chartHost');
+  if (!host) return;
+  lwChart.applyOptions({
+    width: host.clientWidth || 800,
+    height: host.clientHeight || 420,
+  });
+}
+
+function applyTicker(t) {
+  if (!t) return;
+  const px = t.last ?? t.ask ?? t.bid;
+  const el = $('lastPx');
+  if (el) {
+    el.textContent = fmt(px, px > 100 ? 2 : 6);
+    if (lastPrice != null && px != null) el.className = 'px ' + (px >= lastPrice ? 'up' : 'down');
+  }
+  if (px != null) lastPrice = px;
+  if ($('bidPx')) $('bidPx').textContent = fmt(t.bid, 2);
+  if ($('askPx')) $('askPx').textContent = fmt(t.ask, 2);
+  const chgTxt = t.change != null ? (Number(t.change) * 100).toFixed(2) + '%' : '—';
+  if ($('chgPx')) $('chgPx').textContent = chgTxt;
+  if ($('hiPx')) $('hiPx').textContent = fmt(t.high, 2);
+  if ($('loPx')) $('loPx').textContent = fmt(t.low, 2);
+  if ($('volPx')) $('volPx').textContent = fmt(t.volume, 2);
+  if ($('srcPx')) $('srcPx').textContent = t.source || '—';
+  const inst = t.instrument || ($('deckSym') && $('deckSym').value) || 'BTC_USDT';
+  if ($('instLabel')) $('instLabel').textContent = inst;
+  if ($('deckSrc')) $('deckSrc').textContent = 'feed ' + (t.source || '—');
+  if ($('kpiMarket')) $('kpiMarket').textContent = String(inst).split('_')[0] + ' ' + fmt(px, px > 100 ? 2 : 6);
+  if ($('kpiMarketNote')) $('kpiMarketNote').textContent = (t.source || 'public feed') + (t.change != null ? ' · ' + chgTxt + ' 24h' : '');
+  if ($('kpiMarketDot')) $('kpiMarketDot').className = 'live-dot on';
+  if ($('lsInst')) $('lsInst').textContent = inst;
+  if ($('lsLast')) {
+    $('lsLast').textContent = fmt(px, px > 100 ? 2 : 6);
+    if (lastPrice != null && px != null) $('lsLast').className = 'v ' + (px >= lastPrice ? 'buy' : 'sell');
+  }
+  if ($('lsChg')) {
+    $('lsChg').textContent = chgTxt;
+    $('lsChg').className = 'v ' + (t.change != null && Number(t.change) >= 0 ? 'buy' : t.change != null ? 'sell' : '');
+  }
+  if ($('lsFeed')) $('lsFeed').textContent = t.source || '—';
+  checkPriceAlert(px);
+  // LIVE candle update
+  if (candlesCache.length && px != null) {
+    const last = candlesCache[candlesCache.length - 1];
+    last.c = px;
+    if (px > last.h) last.h = px;
+    if (px < last.l) last.l = px;
+    updateLastBarLive(px);
+  }
+}
+
+function setCandles(candles, source) {
+  candlesCache = (candles || []).slice();
+  if (source) {
+    if ($('srcPx')) $('srcPx').textContent = source;
+    if ($('lsFeed')) $('lsFeed').textContent = source;
+  }
+  pushChartData(candlesCache);
+  if (chartOverlay) applyOverlayToChart(chartOverlay);
+  if ($('aiScanPill')) {
+    $('aiScanPill').textContent = candlesCache.length ? 'Live chart · ' + (source || 'feed') : 'AI idle';
+    $('aiScanPill').className = 'pill live';
+  }
+}
+
+function setChartOverlay(ov) {
+  chartOverlay = ov || null;
+  renderToolActivity(ov);
+  applyOverlayToChart(ov);
+}
+
+function renderToolActivity(ov) {
+  const el = $('toolActivity');
+  if (!el) return;
+  const active = (ov && ov.tools_active) || TOOL_ORDER;
+  el.innerHTML = active.map((name) =>
+    `<span class="tool-chip on">${esc(name)}</span>`
+  ).join('');
+}
+
+function updateChartHud(ov, lastBar) {
   const hud = $('chartHud');
   if (!hud) return;
   const st = (ov && ov.stats) || {};
   const vf = st.volume_forecast || {};
+  const lastPx = lastBar && lastBar.close != null ? lastBar.close : (lastPrice);
   hud.innerHTML = `
-    <div><b>Bias</b> ${esc(st.bias_label || '—')} · score ${esc(st.bias_score != null ? Number(st.bias_score).toFixed(2) : '—')}</div>
+    <div><b>Bias</b> ${esc(st.bias_label || '—')} · ${esc(st.bias_score != null ? Number(st.bias_score).toFixed(2) : '—')}</div>
     <div><b>RSI</b> ${esc(fmt(st.rsi, 1))} · <b>ATR</b> ${esc(fmt(st.atr, 4))}</div>
     <div><b>SMA20/50</b> ${esc(fmt(st.sma20, 2))} / ${esc(fmt(st.sma50, 2))}</div>
     <div><b>Pattern</b> ${esc(st.pattern || '—')}</div>
-    <div><b>MACD</b> ${esc((st.macd || '—').toString().slice(0, 48))}</div>
-    <div><b>Stoch</b> ${esc(st.stoch || '—')} · <b>OBV</b> ${esc(st.obv || '—')}</div>
-    <div><b>Ichimoku</b> ${esc((st.ichimoku || '—').toString().slice(0, 42))}</div>
-    <div><b>Vol pressure</b> ${esc(vf.bias || '—')} · conf ${esc(vf.confidence != null ? vf.confidence + '%' : '—')}</div>
-    <div><b>Last</b> ${esc(last && last.c != null ? fmt(last.c, 2) : '—')}</div>
+    <div><b>Vol</b> ${esc(vf.bias || '—')} · conf ${esc(vf.confidence != null ? vf.confidence + '%' : '—')}</div>
+    <div><b>Last</b> ${esc(lastPx != null ? fmt(lastPx, 2) : '—')}</div>
   `;
 }
 
-window.addEventListener('resize', () => { if (candlesCache.length) drawChart(candlesCache, performance.now()); });
+window.addEventListener('resize', () => resizeChart());
 
 /* ── jspace / sniper UI ────────────────────────────────────────────────── */
 const jspaceLog = [];
@@ -1701,12 +1627,37 @@ function renderLiveTools(analyses, preferredTf) {
     <div><span>Confidence</span><b>${forecast.confidence == null ? '—' : esc(forecast.confidence) + '%'}</b></div>`;
 }
 
+function buildMarkersFromDecision(data) {
+  // Prefer strategy_position; fall back to trade_decision so Hold still shows AI plan
+  const sp = data.strategy_position || {};
+  const td = data.trade_decision || {};
+  const entry = sp.entry ?? td.entry;
+  const stop = sp.stop_loss ?? td.stop_loss;
+  const tp1 = sp.take_profit_1 ?? td.take_profit_1;
+  const tp2 = sp.take_profit_2 ?? td.take_profit_2;
+  const dir = (data.verdict && data.verdict.verdict) || td.direction || sp.side || 'Plan';
+  const marks = [];
+  if (entry != null) marks.push({ id: 'entry', price: Number(entry), label: 'ENTRY', color: '#a855f7', side: dir });
+  if (stop != null && Number(stop) !== Number(entry)) marks.push({ id: 'stop', price: Number(stop), label: 'STOP', color: '#ef4444', side: dir });
+  if (tp1 != null) marks.push({ id: 'tp1', price: Number(tp1), label: 'TP1', color: '#22c55e', side: dir });
+  if (tp2 != null && Number(tp2) !== Number(tp1)) marks.push({ id: 'tp2', price: Number(tp2), label: 'TP2', color: '#14b8a6', side: dir });
+  return marks;
+}
+
 function applySniper(data) {
   if (data.ticker) applyTicker(data.ticker);
   if (data.candles && data.candles.length) setCandles(data.candles, (data.data_sources || [])[0]);
-  // Do NOT reset animation every tick — only deploy tools once
-  if (data.chart_overlay) setChartOverlay(data.chart_overlay);
-  else {
+  // Always force visible AI entry/exit from decision (Hold still shows plan levels)
+  const forceMarks = buildMarkersFromDecision(data);
+  let ov = data.chart_overlay ? { ...data.chart_overlay } : null;
+  if (ov) {
+    // merge server markers with forced plan; prefer forced for entry/stop/tp
+    const byId = {};
+    for (const m of (ov.markers || [])) byId[m.id] = m;
+    for (const m of forceMarks) byId[m.id] = m;
+    ov.markers = Object.values(byId);
+    setChartOverlay(ov);
+  } else {
     const analyses = data.mtf_analyses || data.analyses || {};
     const tf = data.timeframe || $('deckTf').value;
     const primary = analyses[tf] || Object.values(analyses)[0] || {};
@@ -1716,11 +1667,7 @@ function applySniper(data) {
         primary.support != null ? { id:'support', price:primary.support, label:'Support', kind:'sr', color:'#22c55e' } : null,
         primary.resistance != null ? { id:'resistance', price:primary.resistance, label:'Resistance', kind:'sr', color:'#ef4444' } : null,
       ].filter(Boolean),
-      markers: [
-        data.strategy_position?.entry != null ? { id:'entry', price:data.strategy_position.entry, label:'ENTRY', color:'#a855f7' } : null,
-        data.strategy_position?.stop_loss != null ? { id:'stop', price:data.strategy_position.stop_loss, label:'STOP', color:'#ef4444' } : null,
-        data.strategy_position?.take_profit_1 != null ? { id:'tp1', price:data.strategy_position.take_profit_1, label:'TP1', color:'#22c55e' } : null,
-      ].filter(Boolean),
+      markers: forceMarks,
       zones: [],
       stats: primary,
       tools_active: TOOL_ORDER,
@@ -1777,7 +1724,6 @@ function applySniper(data) {
   pushLog(dir, data.summary || v.one_liner || '');
   if ($('deckTick')) $('deckTick').textContent = 'tick ' + new Date().toLocaleTimeString();
   if (Date.now() - lastBookLoad > 15000) loadOrderBook();
-  chartDirty = true;
 }
 $('shareSetup').addEventListener('click', async () => {
   if (!currentShareText) return toast('Run a live analysis before sharing.', 'err');
@@ -1845,12 +1791,22 @@ function startDeck() {
   const sym = $('deckSym').value.trim() || 'BTC_USDT';
   const tf = $('deckTf').value || '1m';
   const q = $('deckQ').value.trim() || 'live sniper';
-  $('chartTfPill').textContent = tf;
+  if ($('chartTfPill')) $('chartTfPill').textContent = tf;
   setDeckStatus(null, 'connecting…');
-  const url = `/live/deck?symbol=${encodeURIComponent(sym)}&timeframe=${encodeURIComponent(tf)}&interval_ms=6000&query=${encodeURIComponent(q)}&news_every=2&grok_every=2`;
+  // re-init chart so timescale matches new stream
+  initChart();
+  candlesCache = [];
+  chartOverlay = null;
+  // Faster live feel: ticker path still updates bars between full packs
+  const url = `/live/deck?symbol=${encodeURIComponent(sym)}&timeframe=${encodeURIComponent(tf)}&interval_ms=3000&query=${encodeURIComponent(q)}&news_every=3&grok_every=3`;
   deckEs = new EventSource(url);
   $('deckGo').textContent = 'Live…';
   loadOrderBook();
+  // also fetch candles immediately so timescale paints before first SSE pack
+  fetch(`/market/candles?symbol=${encodeURIComponent(sym)}&timeframe=${encodeURIComponent(tf)}&count=120`)
+    .then((r) => r.json())
+    .then((d) => { if (d.candles) setCandles(d.candles, d.source); })
+    .catch(() => {});
   deckEs.addEventListener('hello', (ev) => {
     setDeckStatus(true, 'live deck armed');
     try {
@@ -1864,14 +1820,17 @@ function startDeck() {
   deckEs.addEventListener('candles', (ev) => {
     try {
       const d = JSON.parse(ev.data);
-      setCandles(d.candles, d.source);
-    } catch (_) {}
+      if (d.candles && d.candles.length) setCandles(d.candles, d.source || d.timeframe);
+    } catch (e) { console.warn('candles parse', e); }
   });
   deckEs.addEventListener('sniper', (ev) => {
     try {
       applySniper(JSON.parse(ev.data));
-      setDeckStatus(true, 'live · jspace');
-    } catch (_) {}
+      setDeckStatus(true, 'live · chart');
+    } catch (e) {
+      console.warn('sniper parse', e);
+      setDeckStatus(false, 'sniper error');
+    }
   });
   deckEs.addEventListener('grok', (ev) => {
     try { applyGrokComment(JSON.parse(ev.data)); } catch (_) {}
@@ -2325,6 +2284,12 @@ $('sigSell').addEventListener('click', () => emitSide('SELL'));
 $('refreshCopy').addEventListener('click', refreshCopyState);
 
 /* boot */
+if ($('deckTf')) {
+  $('deckTf').addEventListener('change', () => {
+    // Timescale / TF change: restart live stream + chart
+    startDeck();
+  });
+}
 fetch('/health').then((r) => r.json()).then((d) => {
   if (d.version) $('ver').textContent = 'v' + d.version;
 }).catch(() => {});

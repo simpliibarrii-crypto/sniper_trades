@@ -1054,28 +1054,37 @@ def raven_analyze(
     rsi_v = (primary or {}).get("rsi")
     volume_forecast = (primary or {}).get("volume_forecast") or {}
 
-    if last and atr_v:
+    if last:
+        last_f = float(last)
+        # Ensure visible plan geometry even when ATR is tiny/noisy on 1m
+        atr_use = float(atr_v) if atr_v and atr_v > 0 else last_f * 0.004
+        atr_use = max(atr_use, last_f * 0.0015)  # ≥ 0.15% of price
         if direction == "Long":
-            entry = float(last)
-            stop = max(entry - 1.5 * atr_v, float(support or entry - 2 * atr_v))
-            tp1 = entry + 2.0 * atr_v
+            entry = last_f
+            stop = min(entry - 1.5 * atr_use, float(support or entry - 2 * atr_use))
+            if stop >= entry:
+                stop = entry - 1.5 * atr_use
+            tp1 = entry + 2.0 * atr_use
             if resistance and resistance > entry:
                 tp1 = max(tp1, float(resistance))
-            tp2 = entry + 3.0 * atr_v
+            tp2 = entry + 3.0 * atr_use
             leverage = "1x spot only — derivatives locked until funding/OI/liquidations are verified"
         elif direction == "Short":
-            entry = float(last)
-            stop = min(entry + 1.5 * atr_v, float(resistance or entry + 2 * atr_v))
-            tp1 = entry - 2.0 * atr_v
+            entry = last_f
+            stop = max(entry + 1.5 * atr_use, float(resistance or entry + 2 * atr_use))
+            if stop <= entry:
+                stop = entry + 1.5 * atr_use
+            tp1 = entry - 2.0 * atr_use
             if support and support < entry:
                 tp1 = min(tp1, float(support))
-            tp2 = entry - 3.0 * atr_v
+            tp2 = entry - 3.0 * atr_use
             leverage = "paper/reduce-only — leveraged shorts locked without derivatives telemetry"
         else:
-            entry = float(last)
-            stop = entry - 1.5 * atr_v
-            tp1 = entry + 1.5 * atr_v
-            tp2 = entry + 2.5 * atr_v
+            # Hold still paints a reference plan so entry/exit are visible on chart
+            entry = last_f
+            stop = entry - 1.5 * atr_use
+            tp1 = entry + 2.0 * atr_use
+            tp2 = entry + 3.0 * atr_use
             leverage = "0x — no new risk until high-probability sniper setup"
     else:
         entry = last
@@ -1225,14 +1234,15 @@ def raven_analyze(
     )
 
     next_action = _next_action(direction, instrument, user_tf, stop, entry, rr)
+    # Always expose plan geometry for chart (Hold = reference plan, not live size)
     strategy_position = {
         "status": "proposed" if direction in ("Long", "Short") else "flat",
         "side": direction if direction in ("Long", "Short", "Exit") else "Flat",
         "instrument": instrument,
-        "entry": entry if direction in ("Long", "Short") else None,
-        "stop_loss": stop if direction in ("Long", "Short") else None,
-        "take_profit_1": tp1 if direction in ("Long", "Short") else None,
-        "take_profit_2": tp2 if direction in ("Long", "Short") else None,
+        "entry": entry,
+        "stop_loss": stop,
+        "take_profit_1": tp1,
+        "take_profit_2": tp2,
         "leverage": leverage,
         "position_size_pct": size_pct,
         "risk_note": risk_note,
