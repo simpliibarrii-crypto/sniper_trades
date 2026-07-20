@@ -687,15 +687,27 @@ def build_chart_overlay(
     candles: List[Dict[str, Any]],
     analysis: Optional[Dict[str, Any]],
     decision: Optional[Dict[str, Any]] = None,
+    max_bars: int = 120,
 ) -> Dict[str, Any]:
-    """Numeric layers the UI draws and animates on the main chart."""
+    """Numeric layers the UI draws on the main chart.
+
+    Series length always matches the returned candle window (last max_bars).
+    Levels far from candle range are omitted so scale stays readable.
+    """
+    if max_bars and len(candles) > max_bars:
+        candles = candles[-max_bars:]
     closes = _closes(candles)
     vols = _vols(candles)
     n = len(closes)
+    candle_high = max(
+        (float(c["h"]) for c in candles if c.get("h") is not None), default=None
+    )
+    candle_low = min(
+        (float(c["l"]) for c in candles if c.get("l") is not None), default=None
+    )
     ema21_full = ema_series(closes, 21) if n else []
-    # pad ema to full length if short
     if len(ema21_full) < n:
-        ema21_full = [None] * (n - len(ema21_full)) + ema21_full  # type: ignore[list-item]
+        ema21_full = [None] * (n - len(ema21_full)) + list(ema21_full)  # type: ignore[list-item]
     bb = _bb_series(closes, 20, 2.0)
     analysis = analysis or {}
     decision = decision or {}
@@ -703,24 +715,40 @@ def build_chart_overlay(
     piv = analysis.get("pivots") or {}
     levels: List[Dict[str, Any]] = []
 
-    def add_level(lid: str, price: Any, label: str, kind: str, color: str) -> None:
+    def _in_band(price: float, pad_mult: float = 0.12) -> bool:
+        if candle_high is None or candle_low is None:
+            return True
+        pad = (candle_high - candle_low) * pad_mult or abs(candle_high) * 0.01
+        return (candle_low - pad) <= price <= (candle_high + pad)
+
+    def add_level(
+        lid: str,
+        price: Any,
+        label: str,
+        kind: str,
+        color: str,
+        *,
+        require_in_band: bool = True,
+    ) -> None:
         if price is None:
             return
         try:
             p = float(price)
         except (TypeError, ValueError):
             return
+        if require_in_band and not _in_band(p):
+            return
         levels.append(
             {"id": lid, "price": p, "label": label, "kind": kind, "color": color}
         )
 
-    add_level("support", analysis.get("support"), "Support", "sr", "#3dd68c")
-    add_level("resistance", analysis.get("resistance"), "Resistance", "sr", "#ff6b7a")
-    add_level("pivot", piv.get("p"), "Pivot", "pivot", "#6ea8ff")
-    add_level("r1", piv.get("r1"), "R1", "pivot", "#ff8a96")
-    add_level("s1", piv.get("s1"), "S1", "pivot", "#4aeb9a")
-    add_level("r2", piv.get("r2"), "R2", "pivot", "#ff8a96")
-    add_level("s2", piv.get("s2"), "S2", "pivot", "#4aeb9a")
+    add_level("support", analysis.get("support"), "Support", "sr", "#22c55e")
+    add_level("resistance", analysis.get("resistance"), "Resistance", "sr", "#ef4444")
+    add_level("pivot", piv.get("p"), "Pivot", "pivot", "#60a5fa")
+    add_level("r1", piv.get("r1"), "R1", "pivot", "#f87171")
+    add_level("s1", piv.get("s1"), "S1", "pivot", "#4ade80")
+    add_level("r2", piv.get("r2"), "R2", "pivot", "#f87171")
+    add_level("s2", piv.get("s2"), "S2", "pivot", "#4ade80")
     for key, lab in (
         ("fib_0.236", "Fib 23.6%"),
         ("fib_0.382", "Fib 38.2%"),
@@ -730,15 +758,15 @@ def build_chart_overlay(
         ("swing_high", "Swing High"),
         ("swing_low", "Swing Low"),
     ):
-        add_level(key, fib.get(key), lab, "fib", "#f0b429")
+        add_level(key, fib.get(key), lab, "fib", "#eab308")
 
     # trade plan markers
     markers: List[Dict[str, Any]] = []
     for mid, key, lab, color in (
-        ("entry", "entry", "ENTRY", "#b86cff"),
-        ("stop", "stop_loss", "STOP", "#ff6b7a"),
-        ("tp1", "take_profit_1", "TP1", "#3dd68c"),
-        ("tp2", "take_profit_2", "TP2", "#3dd6c6"),
+        ("entry", "entry", "ENTRY", "#a855f7"),
+        ("stop", "stop_loss", "STOP", "#ef4444"),
+        ("tp1", "take_profit_1", "TP1", "#22c55e"),
+        ("tp2", "take_profit_2", "TP2", "#14b8a6"),
     ):
         px = decision.get(key)
         if px is None:
@@ -750,6 +778,7 @@ def build_chart_overlay(
                 "label": lab,
                 "color": color,
                 "side": decision.get("direction") or decision.get("side"),
+                "in_band": _in_band(float(px), pad_mult=1.5),
             }
         )
 
@@ -788,6 +817,7 @@ def build_chart_overlay(
     return {
         "timeframe": analysis.get("timeframe"),
         "bars": n,
+        "scale_hint": {"candle_high": candle_high, "candle_low": candle_low},
         "series": {
             "sma20": _rolling_sma_series(closes, 20),
             "sma50": _rolling_sma_series(closes, 50),

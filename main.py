@@ -397,6 +397,14 @@ async def live_deck(
                         "stop_loss": sp.get("stop_loss"),
                         "take_profit_1": sp.get("take_profit_1"),
                     }
+                overlay = raven.get("chart_overlay") or {}
+                if overlay and candles:
+                    n = len(candles)
+                    series = dict(overlay.get("series") or {})
+                    for key, arr in list(series.items()):
+                        if isinstance(arr, list) and len(arr) > n:
+                            series[key] = arr[-n:]
+                    overlay = {**overlay, "series": series, "bars": n}
                 sniper_payload = {
                     "trader": "Sniper Trades",
                     "instrument": market.get("instrument"),
@@ -411,7 +419,7 @@ async def live_deck(
                     "summary": raven.get("summary"),
                     "result_text": raven.get("result_text"),
                     "mtf_analyses": raven.get("analyses"),
-                    "chart_overlay": raven.get("chart_overlay"),
+                    "chart_overlay": overlay,
                     "trade_decision": raven.get("trade_decision"),
                     "ts": time.time(),
                 }
