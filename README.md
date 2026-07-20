@@ -1,6 +1,40 @@
 # Sniper Trades · J-Space
 
-Local sovereign reasoning workspace powered by **Sniper Trades** live strategy: multi-TF free market data (1m+), explicit J-Space graph, TradingView-style tool stack, copy-trade, live chart, and provenance.
+**RavenTrade Core / Sniper Trades** — live crypto intelligence console for **phone + desktop**.
+
+Multi-TF free market data (1m+), Raven J-Space, Grok live co-pilot (xAI when keyed), risk calculator, paper copy-trade, DEX discovery, finance news, price alerts, and PWA install shell.
+
+### Mobile + desktop
+
+- Responsive flight deck with bottom tab bar on phones (`viewport-fit=cover`, safe-area)
+- Installable PWA: `/manifest.webmanifest` + `/sw.js`
+- Server binds `0.0.0.0:8000` by default — open `http://<your-lan-ip>:8000` from a phone
+
+### Grok live updates
+
+```bash
+export XAI_API_KEY=...          # https://console.x.ai
+# optional: export SNIPER_XAI_MODEL=grok-4-1-fast-non-reasoning
+./scripts/run.sh
+```
+
+- `GET /grok/status` — configured?
+- `POST /grok/comment` — one-shot brief
+- Live deck SSE event `grok` every N ticks (local fallback if no key)
+
+### Features people asked for (shipped)
+
+| Ask | Where |
+|-----|--------|
+| Live prices / 1m charts | Free market stack + Live Deck |
+| AI explanation | J-Space + Grok co-pilot |
+| Risk / position size | `/risk/calculate` + UI |
+| Paper trading | Copy-trade ledger |
+| Alerts | Local + server `/alerts` |
+| Watchlist | `/market/radar` |
+| News | Free RSS mesh |
+| Portfolio view | `/portfolio/paper` |
+| Connections health | `/integrations?probe=true` |
 
 ## v6.2 Raven console
 

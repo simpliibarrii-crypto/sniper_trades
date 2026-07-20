@@ -189,3 +189,17 @@ class RiskCalculationOut(BaseModel):
     risk_reward: Optional[float] = None
     capped: bool = False
     warnings: List[str] = Field(default_factory=list)
+
+
+class AlertCreate(BaseModel):
+    instrument: str = "BTC_USDT"
+    direction: str = Field(..., description="above | below")
+    target: float = Field(..., gt=0)
+    note: str = ""
+
+
+class GrokCommentIn(BaseModel):
+    instrument: str = "BTC_USDT"
+    timeframe: str = "1m"
+    query: str = "live sniper"
+    include_news: bool = True

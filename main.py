@@ -21,10 +21,12 @@ from fastapi.responses import FileResponse, HTMLResponse, ORJSONResponse, Stream
 
 from config import get_settings
 from schemas import (
+    AlertCreate,
     BookOut,
     CandlesOut,
     CopySignalIn,
     FollowerCreate,
+    GrokCommentIn,
     HealthOut,
     LeaderCreate,
     ReadyOut,
@@ -37,14 +39,32 @@ from schemas import (
     TickerOut,
 )
 from agents.raven_trader import LIVE_SNIPER_TRADER_PROMPT, TRADER_SYSTEM_PROMPT, raven_analyze
-from services import dex_intel, finance_news, free_market, integrations, pipeline, solana_wallet
+from services import (
+    alerts_store,
+    dex_intel,
+    finance_news,
+    free_market,
+    grok_live,
+    integrations,
+    paper_portfolio,
+    pipeline,
+    solana_wallet,
+)
 from services.copy_trade import get_engine
 from services.raven_market_pack import build_market_pack
 from services.risk import calculate_position_size
 from services.trade_intel import parse_trade_intent
+import os
 
 _UI = Path(__file__).resolve().parent / "ui" / "index.html"
+_UI_DIR = Path(__file__).resolve().parent / "ui"
 _settings = get_settings()
+
+# Propagate settings key into env for grok_live helper
+if _settings.xai_api_key and not os.environ.get("XAI_API_KEY"):
+    os.environ["XAI_API_KEY"] = _settings.xai_api_key
+if _settings.xai_model:
+    os.environ.setdefault("SNIPER_XAI_MODEL", _settings.xai_model)
 
 
 @asynccontextmanager
@@ -149,7 +169,108 @@ async def news_sources():
 @app.get("/integrations")
 async def integration_list(probe: bool = Query(False)):
     """One safe, UI-ready registry for all actual app tools and connections."""
-    return await asyncio.to_thread(integrations.integration_snapshot, probe)
+    snap = await asyncio.to_thread(integrations.integration_snapshot, probe)
+    # Attach Grok connection status into summary for Connections panel
+    g = grok_live.grok_status()
+    snap["grok"] = g
+    return snap
+
+
+@app.get("/grok/status")
+async def grok_status():
+    return grok_live.grok_status()
+
+
+@app.post("/grok/comment")
+async def grok_comment(payload: GrokCommentIn):
+    """One-shot Grok live brief for an instrument (API or local fallback)."""
+    try:
+        market = await asyncio.to_thread(
+            build_market_pack, payload.instrument, payload.timeframe
+        )
+        intent = parse_trade_intent(
+            f"{payload.query} {payload.instrument} {payload.timeframe}"
+        )
+        intent["primary_symbol"] = payload.instrument.split("_")[0].upper()
+        intent["timeframe"] = payload.timeframe
+        raven = await asyncio.to_thread(raven_analyze, intent, market, [], None)
+        news = None
+        headlines: list = []
+        if payload.include_news:
+            news = await asyncio.to_thread(finance_news.get_news, 8, None, False)
+            headlines = grok_live.headlines_from_news(news)
+        ctx = {
+            "instrument": market.get("instrument"),
+            "timeframe": payload.timeframe,
+            "ticker": market.get("ticker"),
+            "verdict": raven.get("verdict"),
+            "strategy_position": raven.get("strategy_position"),
+            "mtf_analyses": raven.get("analyses"),
+            "jspace": raven.get("jspace"),
+            "tv_analysis": raven.get("tv_analysis"),
+            "news_headlines": headlines,
+            "ts": time.time(),
+        }
+        comment = await asyncio.to_thread(grok_live.generate_live_comment, ctx)
+        return {
+            "comment": comment,
+            "verdict": raven.get("verdict"),
+            "summary": raven.get("summary"),
+            "instrument": market.get("instrument"),
+        }
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/alerts")
+async def alerts_list():
+    return await asyncio.to_thread(alerts_store.list_alerts)
+
+
+@app.post("/alerts")
+async def alerts_create(payload: AlertCreate):
+    try:
+        row = await asyncio.to_thread(
+            alerts_store.add_alert,
+            payload.instrument,
+            payload.direction,
+            payload.target,
+            payload.note,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return row
+
+
+@app.delete("/alerts/{alert_id}")
+async def alerts_delete(alert_id: str):
+    ok = await asyncio.to_thread(alerts_store.remove_alert, alert_id)
+    return {"deleted": ok, "id": alert_id}
+
+
+@app.get("/portfolio/paper")
+async def portfolio_paper():
+    """Mark-to-market paper portfolio from the copy-trade ledger."""
+    try:
+        return await asyncio.to_thread(paper_portfolio.portfolio_snapshot)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/manifest.webmanifest")
+async def web_manifest():
+    path = _UI_DIR / "manifest.webmanifest"
+    if path.is_file():
+        return FileResponse(path, media_type="application/manifest+json")
+    raise HTTPException(status_code=404, detail="manifest missing")
+
+
+@app.get("/sw.js")
+async def service_worker():
+    path = _UI_DIR / "sw.js"
+    if path.is_file():
+        return FileResponse(path, media_type="application/javascript")
+    raise HTTPException(status_code=404, detail="sw missing")
 
 
 @app.get("/sniper/live")
@@ -231,11 +352,12 @@ async def live_deck(
     interval_ms: int = Query(5000, ge=2000, le=60_000),
     query: str = Query("live sniper", max_length=200),
     news_every: int = Query(3, ge=1, le=20),
+    grok_every: int = Query(2, ge=1, le=30),
 ):
     """
     Unified live deck SSE:
-      hello | ticker | candles | sniper (jspace) | news | error
-    Chart moves + AI jspace + finance news in one stream.
+      hello | ticker | candles | sniper | grok | news | alerts | portfolio | error
+    Chart moves + AI jspace + Grok live brief + finance news.
     """
 
     async def gen() -> AsyncIterator[str]:
@@ -247,18 +369,17 @@ async def live_deck(
         intent_base["timeframe"] = timeframe
         yield (
             "event: hello\n"
-            f"data: {json.dumps({'deck': True, 'instrument': inst, 'timeframe': timeframe})}\n\n"
+            f"data: {json.dumps({'deck': True, 'instrument': inst, 'timeframe': timeframe, 'grok': grok_live.grok_status()})}\n\n"
         )
         prior: Optional[dict] = None
         tick = 0
+        last_news: Optional[dict] = None
         while True:
             tick += 1
             try:
-                # Fast path: ticker every tick for chart price pulse
                 ticker = await asyncio.to_thread(free_market.get_ticker, inst)
                 yield f"event: ticker\ndata: {json.dumps(ticker)}\n\n"
 
-                # Full pack + sniper every tick (chart + jspace)
                 market = await asyncio.to_thread(build_market_pack, inst, timeframe)
                 pack = (market.get("timeframes") or {}).get(timeframe) or {}
                 candles = (pack.get("candles") or [])[-120:]
@@ -292,12 +413,43 @@ async def live_deck(
                 }
                 yield f"event: sniper\ndata: {json.dumps(sniper_payload)}\n\n"
 
-                # News on first tick and every N ticks
+                # Server-side multi-alert evaluation
+                px = (market.get("ticker") or ticker or {}).get("last")
+                if px is not None:
+                    fired = await asyncio.to_thread(
+                        alerts_store.evaluate_prices, {inst: float(px)}
+                    )
+                    if fired:
+                        yield f"event: alerts\ndata: {json.dumps({'fired': fired})}\n\n"
+
                 if tick == 1 or tick % news_every == 0:
-                    news = await asyncio.to_thread(
+                    last_news = await asyncio.to_thread(
                         finance_news.get_news, 20, None, tick == 1
                     )
-                    yield f"event: news\ndata: {json.dumps(news)}\n\n"
+                    yield f"event: news\ndata: {json.dumps(last_news)}\n\n"
+
+                # Grok live commentary (API or local fallback)
+                if tick == 1 or tick % grok_every == 0:
+                    ctx = {
+                        "instrument": market.get("instrument"),
+                        "timeframe": timeframe,
+                        "ticker": market.get("ticker") or ticker,
+                        "verdict": raven.get("verdict"),
+                        "strategy_position": raven.get("strategy_position"),
+                        "mtf_analyses": raven.get("analyses"),
+                        "jspace": raven.get("jspace"),
+                        "tv_analysis": raven.get("tv_analysis"),
+                        "news_headlines": grok_live.headlines_from_news(last_news),
+                        "ts": time.time(),
+                    }
+                    comment = await asyncio.to_thread(
+                        grok_live.generate_live_comment, ctx
+                    )
+                    yield f"event: grok\ndata: {json.dumps(comment)}\n\n"
+
+                if tick == 1 or tick % 4 == 0:
+                    port = await asyncio.to_thread(paper_portfolio.portfolio_snapshot)
+                    yield f"event: portfolio\ndata: {json.dumps(port)}\n\n"
             except Exception as exc:  # noqa: BLE001
                 yield f"event: error\ndata: {json.dumps({'error': str(exc)})}\n\n"
             await asyncio.sleep(interval_ms / 1000.0)

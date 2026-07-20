@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta name="theme-color" content="#b86cff"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <link rel="manifest" href="/manifest.webmanifest"/>
   <title>RavenTrade Core · Crypto Intelligence</title>
   <style>
     :root {
@@ -334,13 +339,29 @@
     .trade-arrow { padding:0 0 .7rem; color:var(--acc); font-size:1.15rem; }
     .contract { font:.65rem/1.35 ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--mut); word-break:break-all; }
     .trade-warning { margin:.7rem 0; padding:.6rem; border:1px solid color-mix(in srgb,var(--warn) 35%,var(--line)); border-radius:10px; color:var(--mut); font-size:.7rem; line-height:1.4; background:rgba(255,200,87,.055); }
+    .grok-box {
+      margin-top:.55rem; padding:.7rem .8rem; border-radius:12px;
+      border:1px solid color-mix(in srgb,var(--acc) 40%,var(--line));
+      background:linear-gradient(145deg,rgba(184,108,255,.12),rgba(0,0,0,.15));
+      font-size:.82rem; line-height:1.45; white-space:pre-wrap; max-height:220px; overflow:auto;
+    }
+    .grok-meta { display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.4rem; }
     @media (max-width: 760px) {
-      main { padding:.9rem .75rem 5rem; }
+      main { padding:.9rem .75rem calc(5.2rem + env(safe-area-inset-bottom,0px)); }
       header { align-items:center; }
       .header-actions .badge { display:none; }
+      .header-actions .primary { padding:.55rem .7rem; font-size:.8rem; }
       .kpi-grid { grid-template-columns:1fr 1fr; }
-      .tabs { position:fixed; z-index:20; bottom:.6rem; left:.6rem; right:.6rem; margin:0; padding:.42rem; justify-content:space-around; background:var(--glass); border:1px solid var(--line); border-radius:14px; backdrop-filter:blur(16px); box-shadow:var(--shadow); }
-      .tab { flex:1; padding:.55rem .35rem; }
+      .chart-wrap { height:240px; }
+      .tabs {
+        position:fixed; z-index:20;
+        bottom:calc(.45rem + env(safe-area-inset-bottom,0px));
+        left:.5rem; right:.5rem; margin:0; padding:.38rem;
+        justify-content:space-around; background:var(--glass);
+        border:1px solid var(--line); border-radius:16px;
+        backdrop-filter:blur(16px); box-shadow:var(--shadow);
+      }
+      .tab { flex:1; padding:.55rem .3rem; font-size:.72rem; }
       .split-3,.result-grid { grid-template-columns:1fr 1fr; }
       .book { grid-template-columns:1fr; }
       .alert-grid { grid-template-columns:1fr 1fr; }
@@ -378,7 +399,7 @@
       <button class="ghost" id="themeToggle" type="button" aria-label="Toggle color theme">Light mode</button>
       <button class="primary" id="tradeNowHeader" type="button">Trade now</button>
       <span class="badge" title="No transaction can leave without a wallet or typed confirmation">Defense locked</span>
-      <span class="badge" id="ver">v6.2</span>
+      <span class="badge" id="ver">v6.3</span>
     </div>
   </header>
 
@@ -500,14 +521,27 @@
         </div>
         <p id="summaryOut" style="margin:0 0 .65rem;color:var(--acc);font-size:.88rem;line-height:1.4">Waiting for live stream…</p>
         <h3 style="font-size:.82rem;color:var(--mut)">Live J-Space decision audit</h3>
-        <pre id="jspaceOut" style="max-height:200px">// concise decision rationale appears here as price moves</pre>
+        <pre id="jspaceOut" style="max-height:160px">// concise decision rationale appears here as price moves</pre>
         <div class="jspace-log" id="jspaceLog"></div>
+        <div class="section-head" style="margin-top:.7rem">
+          <div>
+            <p class="eyebrow">Grok · live co-pilot</p>
+            <h3 style="margin:0;font-size:.88rem">xAI commentary</h3>
+          </div>
+          <span class="pill" id="grokStatusPill">grok —</span>
+        </div>
+        <div class="grok-box" id="grokOut">// Grok live updates stream here (API if XAI_API_KEY set, else local brief)</div>
+        <div class="grok-meta">
+          <span class="pill" id="grokSrc">source —</span>
+          <span class="pill" id="grokLat">latency —</span>
+          <button class="ghost" id="grokOnce" type="button">Refresh Grok</button>
+        </div>
         <div class="tool-grid" id="toolGrid">
           <div class="tool-cell"><span>Timeframes</span><b>—</b></div>
           <div class="tool-cell"><span>RSI</span><b>—</b></div>
           <div class="tool-cell"><span>ATR</span><b>—</b></div>
         </div>
-        <p class="hint" style="margin:.55rem 0 0">Shows observable inputs and concise rationale—not private chain-of-thought. Local indicators are TradingView-style equivalents, not native Pine execution.</p>
+        <p class="hint" style="margin:.55rem 0 0">J-Space is local rule telemetry. Grok adds model commentary when <code>XAI_API_KEY</code> is configured server-side.</p>
       </section>
     </div>
 
@@ -1275,11 +1309,17 @@ function startDeck() {
   const q = $('deckQ').value.trim() || 'live sniper';
   $('chartTfPill').textContent = tf;
   setDeckStatus(null, 'connecting…');
-  const url = `/live/deck?symbol=${encodeURIComponent(sym)}&timeframe=${encodeURIComponent(tf)}&interval_ms=6000&query=${encodeURIComponent(q)}&news_every=2`;
+  const url = `/live/deck?symbol=${encodeURIComponent(sym)}&timeframe=${encodeURIComponent(tf)}&interval_ms=6000&query=${encodeURIComponent(q)}&news_every=2&grok_every=2`;
   deckEs = new EventSource(url);
   $('deckGo').textContent = 'Live…';
   loadOrderBook();
-  deckEs.addEventListener('hello', () => setDeckStatus(true, 'live deck armed'));
+  deckEs.addEventListener('hello', (ev) => {
+    setDeckStatus(true, 'live deck armed');
+    try {
+      const d = JSON.parse(ev.data);
+      if (d.grok) applyGrokStatus(d.grok);
+    } catch (_) {}
+  });
   deckEs.addEventListener('ticker', (ev) => {
     try { applyTicker(JSON.parse(ev.data)); } catch (_) {}
   });
@@ -1295,8 +1335,29 @@ function startDeck() {
       setDeckStatus(true, 'live · jspace');
     } catch (_) {}
   });
+  deckEs.addEventListener('grok', (ev) => {
+    try { applyGrokComment(JSON.parse(ev.data)); } catch (_) {}
+  });
   deckEs.addEventListener('news', (ev) => {
     try { renderNews(JSON.parse(ev.data)); } catch (_) {}
+  });
+  deckEs.addEventListener('alerts', (ev) => {
+    try {
+      const d = JSON.parse(ev.data);
+      (d.fired || []).forEach((a) => {
+        const msg = `${a.instrument} ${a.direction} ${fmt(a.target, 6)} · now ${fmt(a.last_price, 6)}`;
+        toast(msg, 'ok');
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('Price alert', { body: msg });
+        }
+        if ($('alertVoice')?.checked && 'speechSynthesis' in window) {
+          speechSynthesis.speak(new SpeechSynthesisUtterance(msg));
+        }
+      });
+    } catch (_) {}
+  });
+  deckEs.addEventListener('portfolio', (ev) => {
+    try { applyPortfolio(JSON.parse(ev.data)); } catch (_) {}
   });
   deckEs.addEventListener('error', (ev) => {
     try {
@@ -1307,6 +1368,28 @@ function startDeck() {
     }
   });
   deckEs.onerror = () => setDeckStatus(false, 'stream reconnecting…');
+}
+
+function applyGrokStatus(g) {
+  if (!$('grokStatusPill')) return;
+  $('grokStatusPill').textContent = g.configured ? 'grok api ready' : 'local fallback';
+  $('grokStatusPill').className = 'pill ' + (g.configured ? 'ok' : 'live');
+}
+function applyGrokComment(c) {
+  if (!$('grokOut')) return;
+  $('grokOut').textContent = c.text || '// empty';
+  if ($('grokSrc')) $('grokSrc').textContent = 'source ' + (c.source || '—');
+  if ($('grokLat')) $('grokLat').textContent = 'latency ' + (c.latency_ms != null ? c.latency_ms + ' ms' : '—');
+  if ($('grokStatusPill')) {
+    $('grokStatusPill').textContent = c.source === 'grok_api' ? 'grok live' : (c.source || 'grok');
+    $('grokStatusPill').className = 'pill ' + (c.source === 'grok_api' ? 'ok' : c.source === 'error' ? 'err' : 'live');
+  }
+}
+function applyPortfolio(p) {
+  if ($('kpiCash')) $('kpiCash').textContent = '$' + fmt(p.equity_mark ?? p.cash_total, 2);
+  if ($('kpiPositions')) {
+    $('kpiPositions').textContent = (p.open_count || 0) + ' open · cash $' + fmt(p.cash_total, 2);
+  }
 }
 
 $('deckGo').addEventListener('click', startDeck);
@@ -1385,8 +1468,48 @@ $('alertArm').addEventListener('click', async () => {
   armedAlert = { target, direction:$('alertDirection').value };
   $('alertStatus').textContent = `${armedAlert.direction} ${fmt(target,6)}`;
   $('alertStatus').className = 'pill live';
-  toast('Local price alert armed.', 'ok');
+  // Persist server-side so live deck can fire even after reload
+  try {
+    const res = await fetch('/alerts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        instrument: $('deckSym').value.trim() || 'BTC_USDT',
+        direction: $('alertDirection').value,
+        target,
+        note: 'ui',
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'alert save failed');
+    toast('Alert armed (device + server).', 'ok');
+  } catch (e) {
+    toast('Local alert only: ' + (e.message || e), 'err');
+  }
 });
+
+if ($('grokOnce')) {
+  $('grokOnce').addEventListener('click', async () => {
+    try {
+      const res = await fetch('/grok/comment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instrument: $('deckSym').value.trim() || 'BTC_USDT',
+          timeframe: $('deckTf').value || '1m',
+          query: $('deckQ').value.trim() || 'live sniper',
+          include_news: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'grok failed');
+      applyGrokComment(data.comment || {});
+      toast('Grok brief refreshed', 'ok');
+    } catch (e) {
+      toast(String(e.message || e), 'err');
+    }
+  });
+}
 
 /* ── new-token discovery and Phantom wallet nest ─────────────────────── */
 function renderDiscovery(items) {
@@ -1663,6 +1786,8 @@ $('refreshCopy').addEventListener('click', refreshCopyState);
 fetch('/health').then((r) => r.json()).then((d) => {
   if (d.version) $('ver').textContent = 'v' + d.version;
 }).catch(() => {});
+fetch('/grok/status').then((r) => r.json()).then(applyGrokStatus).catch(() => {});
+fetch('/portfolio/paper').then((r) => r.json()).then(applyPortfolio).catch(() => {});
 async function primeDashboard() {
   const symbol = $('deckSym').value.trim() || 'BTC_USDT';
   const tf = $('deckTf').value;
@@ -1675,6 +1800,9 @@ async function primeDashboard() {
     if (candleRes.ok) { const d = await candleRes.json(); setCandles(d.candles, d.source); }
   } catch (_) { $('kpiMarketNote').textContent = 'Feed unavailable · retry with Start live'; }
 }
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
 loadNewsOnce();
 loadOrderBook();
 loadMarketRadar();
@@ -1684,6 +1812,8 @@ refreshCopyState();
 primeDashboard();
 const savedTab = localStorage.getItem('sniper-tab');
 if (savedTab && savedTab !== 'deck') document.querySelector(`.tab[data-tab="${savedTab}"]`)?.click();
+// Auto-start live deck for phone/desktop immersive use
+setTimeout(() => { if (!deckEs) startDeck(); }, 600);
 </script>
 </body>
 </html>

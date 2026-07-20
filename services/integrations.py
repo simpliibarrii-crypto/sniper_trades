@@ -11,7 +11,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Callable, Dict, List
 
-from services import cdc_market, dex_intel, finance_news, free_market, solana_wallet
+from services import cdc_market, dex_intel, finance_news, free_market, grok_live, solana_wallet
 
 
 _CATALOG: List[Dict[str, Any]] = [
@@ -134,6 +134,21 @@ _CATALOG: List[Dict[str, Any]] = [
         "setup": "Start the live deck.",
         "action": "focus_market",
         "action_label": "Start analysis",
+    },
+    {
+        "id": "grok_xai",
+        "name": "Grok Live Co-Pilot (xAI)",
+        "category": "Analysis",
+        "purpose": "Live model commentary on each deck tick via xAI OpenAI-compatible API.",
+        "mode": "optional API",
+        "priority": 8,
+        "default_status": "client_required",
+        "capabilities": ["live brief", "bias check", "news-aware comment", "local fallback"],
+        "providers": ["xAI / SpaceXAI", "Local fallback brief"],
+        "data_shared": "Public market context + headlines only; API key stays server-side.",
+        "setup": "export XAI_API_KEY=... or SNIPER_XAI_API_KEY (console.x.ai).",
+        "action": "focus_market",
+        "action_label": "Open flight deck",
     },
     {
         "id": "risk_engine",
@@ -265,6 +280,19 @@ def integration_snapshot(probe: bool = False) -> Dict[str, Any]:
             "health": {"cdcx_installed": cdcx, "withdrawals_supported": False},
         }
     )
+    g = grok_live.grok_status()
+    if "grok_xai" in by_id:
+        by_id["grok_xai"].update(
+            {
+                "status": "connected" if g.get("configured") else "ready",
+                "detail": (
+                    f"Live Grok via {g.get('model')} (api.x.ai)"
+                    if g.get("configured")
+                    else g.get("hint") or "Local fallback active until XAI_API_KEY is set"
+                ),
+                "health": g,
+            }
+        )
 
     items.sort(key=lambda item: (item["priority"], item["name"]))
     ready_states = {"active", "available", "connected", "dry_run_ready", "ready", "review_only"}
